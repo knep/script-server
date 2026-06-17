@@ -48,6 +48,13 @@ export default defineConfig({
         globals: true,
         setupFiles: ['./tests/unit/setup.js'],
         include: ['tests/unit/**/*_test.js'],
+        coverage: {
+            provider: 'v8',
+            reporter: ['text-summary', 'lcov'],
+            include: ['src/**/*.{js,vue}'],
+            // App bootstrap entry points have no meaningful unit coverage.
+            exclude: ['src/*/index.js', 'src/admin/admin.js', 'src/login/login.js']
+        },
         server: {
             deps: {
                 // vuetify: its library code imports .css files directly, which

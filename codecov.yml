@@ -1,0 +1,24 @@
+coverage:
+  status:
+    project:
+      default:
+        # Report coverage but never fail CI on it (informational).
+        informational: true
+    patch:
+      default:
+        informational: true
+
+# Two independent suites uploaded under separate flags.
+flags:
+  python:
+    paths:
+      - src/
+    carryforward: true
+  frontend:
+    paths:
+      - web-src/src/
+    carryforward: true
+
+comment:
+  layout: "reach, diff, flags, files"
+  require_changes: true

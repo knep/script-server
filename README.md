@@ -1,8 +1,17 @@
 > **Fork** — This is a community-maintained fork of [bugy/script-server](https://github.com/bugy/script-server) (original author: [@bugy](https://github.com/bugy)). The upstream project is no longer actively maintained.
 
 [![CI](https://github.com/knep/script-server/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/knep/script-server/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/knep/script-server/branch/master/graph/badge.svg)](https://codecov.io/gh/knep/script-server)
 
 ## What's new in this fork
+
+### 2026-06-17 — Code coverage measurement
+
+Both test suites now report coverage and upload it to [Codecov](https://codecov.io/gh/knep/script-server) under separate `python` / `frontend` flags.
+
+- **Backend**: `pytest-cov` (config in `.coveragerc`, branch coverage, `tests/` and `e2e_tests/` omitted). Current line coverage ≈ 79%.
+- **Frontend**: Vitest v8 coverage (`npm run test:coverage`, lcov + summary; app bootstrap entry points excluded). Current statement coverage ≈ 66%.
+- Coverage is **informational** — it never fails CI (`codecov.yml`).
 
 ### 2026-06-17 — Bug fixes
 

@@ -47,7 +47,9 @@ nosetests.xml
 coverage.xml
 *,cover
 .hypothesis/
-src/tests/tests_temp
+web-src/coverage/
+# pytest scratch dir — created wherever the suite runs from (root or src/)
+tests_temp/
 
 # Translations
 *.mo

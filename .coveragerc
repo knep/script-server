@@ -1,0 +1,12 @@
+[run]
+branch = True
+omit =
+    */tests/*
+    */e2e_tests/*
+    */__pycache__/*
+
+[report]
+exclude_lines =
+    pragma: no cover
+    if __name__ == .__main__.:
+    raise NotImplementedError

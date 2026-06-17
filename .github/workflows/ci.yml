@@ -27,13 +27,23 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-          pip install ldap3 bcrypt parameterized pytest
+          pip install ldap3 bcrypt parameterized pytest pytest-cov
 
       - name: Run unit tests
         working-directory: src
         env:
           PYTHONPATH: .
-        run: pytest tests/ -q --tb=short
+        run: pytest tests/ -q --tb=short --cov=. --cov-config=../.coveragerc --cov-report=xml
+
+      # Upload coverage once (single matrix version) to avoid duplicate reports.
+      - name: Upload coverage to Codecov
+        if: matrix.python-version == '3.13'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: src/coverage.xml
+          flags: python
+          name: python-coverage
 
   frontend-tests:
     name: Frontend (Node 22)
@@ -53,9 +63,17 @@ jobs:
         working-directory: web-src
         run: npm ci
 
-      - name: Run unit tests
+      - name: Run unit tests with coverage
         working-directory: web-src
-        run: npm run test:unit-ci
+        run: npm run test:coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: web-src/coverage/lcov.info
+          flags: frontend
+          name: frontend-coverage
 
   e2e-tests:
     name: E2E (Playwright)
