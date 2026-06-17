@@ -24,6 +24,14 @@ __pycache__/
 src/tests/
 src/e2e_tests/
 
+# Coverage / test artifacts
+coverage.xml
+src/coverage.xml
+.coverage
+htmlcov/
+web-src/coverage/
+.coveragerc
+
 # Docs
 *.md
 LICENSE
@@ -39,3 +47,13 @@ LICENSE
 # Runtime directories (mounted as volumes)
 conf/runners/
 logs/
+
+# Personal / local config — never ship in the image. Scripts and runner
+# configs are provided at runtime (mounted volumes); conf.json holds local
+# server settings (the image uses script-server defaults: port 5000 = EXPOSE).
+# These are untracked in git, so the CI-built image already excludes them;
+# this keeps local `docker build` consistent with the published image.
+conf/scripts/
+conf/conf.json
+conf/schedules/
+conf/deleted/
