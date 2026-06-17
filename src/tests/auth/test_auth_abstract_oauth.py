@@ -355,7 +355,7 @@ class TestValidateUser(_OauthTestCase):
         username = yield authenticator.authenticate(request_handler)
 
         mock_time.return_value = mock_time.return_value + 60 * 2
-        authenticator.validate_user(username, request_handler)
+        yield authenticator.validate_user(username, request_handler)
 
         mock_time.return_value = mock_time.return_value + 60 * 6
         valid2 = yield authenticator.validate_user(username, request_handler)
