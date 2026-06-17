@@ -1,6 +1,7 @@
 import os
 import threading
 import unittest
+from pathlib import Path
 
 from execution.process_pty import PtyProcessWrapper
 from react.observable import read_until_closed
@@ -36,7 +37,7 @@ class TestEnvironmentVariables(unittest.TestCase):
     def execute_and_get_passed_env(custom_variables):
         env_variables = test_utils.env_variables
         process_wrapper = PtyProcessWrapper(
-            'tests/scripts/printenv.sh', '.', env_variables.build_env_vars(custom_variables))
+            str(Path(__file__).parent.parent / 'scripts' / 'printenv.sh'), '.', env_variables.build_env_vars(custom_variables))
         process_wrapper.start()
         thread = threading.Thread(target=process_wrapper.wait_finish, daemon=True)
         thread.start()

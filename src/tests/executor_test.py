@@ -1,6 +1,7 @@
 import os
 import time
 import unittest
+from pathlib import Path
 
 from config.constants import PARAM_TYPE_MULTISELECT
 from execution import executor
@@ -77,7 +78,7 @@ class TestScriptExecutor(unittest.TestCase):
         with test_utils.custom_env('some_env', 'test'):
             config = create_config_model(
                 'config_x',
-                script_command='tests/scripts/printenv.sh',
+                script_command=str(Path(__file__).parent / 'scripts' / 'printenv.sh'),
                 requires_terminal=True,
                 parameters=[
                     create_script_param_config('id'),
@@ -104,7 +105,7 @@ class TestScriptExecutor(unittest.TestCase):
         with test_utils.custom_env('some_env', 'test'):
             config = create_config_model(
                 'config_x',
-                script_command='tests/scripts/printenv.sh',
+                script_command=str(Path(__file__).parent / 'scripts' / 'printenv.sh'),
                 requires_terminal=False,
                 parameters=[
                     create_script_param_config('id'),

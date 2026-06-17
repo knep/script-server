@@ -1,5 +1,6 @@
 import os
 import unittest
+from pathlib import Path
 
 from execution.process_popen import prepare_cmd_for_win, POpenProcessWrapper
 from tests import test_utils
@@ -34,7 +35,7 @@ class TestEnvironmentVariables(unittest.TestCase):
     def execute_and_get_passed_env(custom_variables):
         env_variables = test_utils.env_variables
         process_wrapper = POpenProcessWrapper(
-            'tests/scripts/printenv.sh', '.', env_variables.build_env_vars(custom_variables))
+            str(Path(__file__).parent / 'scripts' / 'printenv.sh'), '.', env_variables.build_env_vars(custom_variables))
         process_wrapper.start()
         output = test_utils.wait_and_read(process_wrapper)
         lines = output.split('\n')
