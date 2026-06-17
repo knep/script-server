@@ -9,7 +9,7 @@
     "core-js": "^3.25.3",
     "dompurify": "^3.4.9",
     "lodash": "^4.18.1",
-    "marked": "^4.1.0",
+    "marked": "^15.0.12",
     "material-design-icons": "^3.0.1",
     "pinia": "^3.0.4",
     "tinycolor2": "^1.4.2",
