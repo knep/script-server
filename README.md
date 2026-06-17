@@ -4,6 +4,12 @@
 
 ## What's new in this fork
 
+### 2026-06-17 — Bug fixes
+
+**Admin script list redirected to execution history:** clicking a script in the admin panel navigated to `/logs` instead of the script config. The router-link path was a relative URL (`My%20Script`) that Vue Router resolved as `/My%20Script`, matching the wildcard route and redirecting to `/logs`. Fixed by using the absolute path `/scripts/My%20Script`.
+
+**Script code editor failed with bare script filenames:** "Edit script code" raised `Failed to find script path in command "python3 script.py"` when the script was referenced by filename rather than absolute path. The `working_directory` config field was passed to `split_command` but not to `file_utils.exists`, so the script file was searched from the project root instead of the configured working directory. Fixed by passing `working_directory` consistently.
+
 ### 2026-06-17 — Code quality and Python 3.14 compatibility
 
 **Vue 3 `emits` declarations:** 9 components were missing the `emits` option, causing Vue 3 to treat event listeners as DOM fallthrough attributes. This produced silent misbehaviour in the script-edit dialog (radio buttons and text inputs fired the wrong handler) and the schedule panel. All affected components now declare their emitted events explicitly.
