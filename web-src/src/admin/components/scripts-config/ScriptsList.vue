@@ -49,7 +49,7 @@ export default {
       return raw
           ? raw.map(s => ({
             name: s.name,
-            path: encodeURIComponent(s.name),
+            path: '/scripts/' + encodeURIComponent(s.name),
             parsingFailed: s.parsingFailed
           }))
           : []
