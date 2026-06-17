@@ -800,6 +800,20 @@ class ConfigServiceLoadCodeTest(unittest.TestCase):
         self.assert_script_code('tests_temp/script.py', '123', None)
 
     @parameterized.expand([
+        ('python script.py',),
+        ('python3 -u script.py',),
+        ('script.py another.py',),
+    ])
+    def test_load_with_relative_script_and_working_directory(self, command):
+        # Regression: a bare script filename must be resolved relative to the
+        # configured working_directory, not the process CWD. The working_directory
+        # was passed to split_command but not to the file-existence check, so
+        # "python script.py" raised "Failed to find script path in command".
+        _create_script_config_file('ConfX', script_path=command, working_directory=test_utils.temp_folder)
+
+        self.assert_script_code('tests_temp/script.py', '123', None)
+
+    @parameterized.expand([
         ('tests_temp/my_python', 'tests_temp/my_python', 'Cannot edit binary file'),
         ('tests_temp/binary 1.bin', 'tests_temp/binary 1.bin', 'Cannot edit binary file'),
         ('tests_temp/unknown.py', 'tests_temp/unknown.py', 'Script path does not exist'),
