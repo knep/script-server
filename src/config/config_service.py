@@ -186,15 +186,17 @@ class ConfigService:
         if is_blank(script_path):
             raise InvalidFileException('', 'Script path is not specified')
 
-        command = process_utils.split_command(script_path, plain_config.get(WORKING_DIR_FIELD))
+        working_dir = plain_config.get(WORKING_DIR_FIELD)
+        command = process_utils.split_command(script_path, working_dir)
         binary_files = []
         for argument in command:
-            if file_utils.exists(argument):
-                if file_utils.is_binary(argument):
-                    binary_files.append(argument)
+            if file_utils.exists(argument, working_dir):
+                normalized = file_utils.normalize_path(argument, working_dir)
+                if file_utils.is_binary(normalized):
+                    binary_files.append(normalized)
                     continue
 
-                return {'code': file_utils.read_file(argument), 'file_path': argument}
+                return {'code': file_utils.read_file(normalized), 'file_path': normalized}
 
         if binary_files:
             if len(binary_files) == 1:
