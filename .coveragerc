@@ -4,6 +4,10 @@ omit =
     */tests/*
     */e2e_tests/*
     */__pycache__/*
+    # Application bootstrap/wiring: instantiates services and starts the
+    # server. Not unit-testable without a full integration environment.
+    main.py
+    */main.py
 
 [report]
 exclude_lines =
