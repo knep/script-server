@@ -116,6 +116,7 @@ export default {
   font-weight: 300;
   line-height: 110%;
   color: var(--font-color-main);
+  text-decoration: none;
   min-width: 0;
 
   white-space: nowrap;

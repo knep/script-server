@@ -74,7 +74,7 @@
     --background-color-level-16dp: var(--background-color);
     --background-color-disabled: rgba(0, 0, 0, 0.12); /* disabled button */
 
-    --script-header-background: url('../titleBackground_small.jpg') center left / cover no-repeat;
+    --script-header-background: var(--background-color);
     --login-header-background: url('../titleBackground_login.jpg') center / cover no-repeat;
 
     --separator-color: #DDDDDD; /* borders between components */
