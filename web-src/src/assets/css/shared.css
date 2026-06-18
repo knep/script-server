@@ -85,6 +85,36 @@
     --error-color: #F44336;
 }
 
+/* ── Dark theme ─────────────────────────────────────────────────────────
+   Toggled by the `theme-dark` class on <html> (see common/utils/theme.js).
+   Mirrors the Vuetify scriptServerDark theme so custom-styled and Vuetify
+   components stay consistent. */
+html.theme-dark {
+    --hover-color: rgba(255, 255, 255, 0.06);
+    --focus-color: rgba(255, 255, 255, 0.12);
+    --focus-color-solid: #3a3a3a;
+
+    --font-color-main: rgba(255, 255, 255, 0.92);
+    --font-color-medium: rgba(255, 255, 255, 0.62);
+    --font-color-disabled: rgba(255, 255, 255, 0.40);
+
+    --primary-color-light-color: #18403c;
+    --font-on-primary-color-light--main: rgba(255, 255, 255, 0.92);
+
+    --surface-color: #2a2a2a; /* surface color and log panel color */
+
+    --background-color: #1a1a1a;
+    --background-color-slight-emphasis: rgba(255, 255, 255, 0.04);
+    --background-color-high-emphasis: rgba(255, 255, 255, 0.10);
+    --background-color-disabled: rgba(255, 255, 255, 0.12);
+
+    --separator-color: rgba(255, 255, 255, 0.14);
+
+    --outline-color: rgba(255, 255, 255, 0.30);
+
+    color-scheme: dark;
+}
+
 /* ── Minimal 12-column grid (replaces materialize _grid.scss) ─────────── */
 .row { display: flex; flex-wrap: wrap; margin: 0 -12px; }
 .col { padding: 0 12px; box-sizing: border-box; }

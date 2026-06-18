@@ -22,6 +22,8 @@
           </svg>
         </a>
       </div>
+
+      <ThemeToggle class="theme-toggle"/>
     </div>
 
     <ScriptsList :search-text="searchText"/>
@@ -45,6 +47,7 @@
 <script>
 import ScriptsList from './scripts/ScriptsList'
 import SearchPanel from './SearchPanel';
+import ThemeToggle from '@/common/components/ThemeToggle';
 import {useServerConfigStore} from '@/main-app/stores/serverConfig'
 import {useAuthStore} from '@/common/stores/auth'
 import {useExecutionsStore} from '@/main-app/stores/executions'
@@ -54,7 +57,8 @@ export default {
   name: 'MainAppSidebar',
   components: {
     SearchPanel,
-    ScriptsList
+    ScriptsList,
+    ThemeToggle
   },
 
   data() {
@@ -150,6 +154,10 @@ export default {
   margin: 0 1rem;
   display: flex;
   line-height: 0;
+}
+
+.theme-toggle {
+  margin-right: 0.5rem;
 }
 
 .header-link .svg-icon {
