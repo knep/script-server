@@ -9,6 +9,13 @@
       Failed to parse config file
     </v-tooltip>
     <template #append>
+      <v-icon
+        class="favorite-toggle"
+        :class="{ 'is-favorite': isFavorite }"
+        :size="18"
+        :title="isFavorite ? 'Remove from favorites' : 'Add to favorites'"
+        @click.stop.prevent="toggleFavorite"
+      >{{ isFavorite ? 'star' : 'star_border' }}</v-icon>
       <v-progress-circular
         v-if="descriptor.state === 'executing'"
         :size="20"
@@ -26,6 +33,7 @@
 import {forEachKeyValue} from '@/common/utils/common';
 import {useScriptsStore} from '@/main-app/stores/scripts'
 import {useExecutionsStore} from '@/main-app/stores/executions'
+import {useScriptFavoritesStore} from '@/main-app/stores/scriptFavorites'
 import {scriptNameToHash} from '../../utils/model_helper';
 
 export default {
@@ -47,9 +55,15 @@ export default {
     },
     selectedScript() {
       return useScriptsStore().selectedScript
+    },
+    isFavorite() {
+      return useScriptFavoritesStore().isFavorite(this.script.name)
     }
   },
   methods: {
+    toggleFavorite() {
+      useScriptFavoritesStore().toggle(this.script.name)
+    },
     getState(scriptName) {
       if (this.script.parsing_failed) {
         return 'cannot-parse'
@@ -84,5 +98,26 @@ export default {
 .script-list-item.v-list-item--active :deep(.v-list-item-title) {
   color: var(--primary-color);
   font-weight: 500;
+}
+
+/* Star is hidden until row hover, but stays visible once a script is favorited. */
+.favorite-toggle {
+  color: var(--font-color-disabled);
+  opacity: 0;
+  margin-right: 4px;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.script-list-item:hover .favorite-toggle {
+  opacity: 1;
+}
+
+.favorite-toggle:hover {
+  color: var(--font-color-medium);
+}
+
+.favorite-toggle.is-favorite {
+  opacity: 1;
+  color: #f5b301;
 }
 </style>

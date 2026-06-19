@@ -5,6 +5,13 @@
 
 ## What's new in this fork
 
+### 2026-06-19 — Favorite scripts
+
+Scripts can be pinned as favorites for quick access. A star button on each script
+in the sidebar toggles its favorite state, and favorited scripts appear in a
+dedicated **Favorites** section at the top of the sidebar. The selection is
+persisted to `localStorage`.
+
 ### 2026-06-19 — Multi-tab workflow: status, notifications, shortcuts
 
 Builds on the in-app tabs to make working with several scripts at once smoother.
