@@ -5,6 +5,25 @@
 
 ## What's new in this fork
 
+### 2026-06-19 — UI refresh, dark mode and in-app tabs
+
+A visual refresh of the main app, a dark theme, and the ability to keep several
+scripts open at once.
+
+- **Dark mode**: a light/dark toggle (top-right of the sidebar, admin header, and
+  login page) that persists in `localStorage` and otherwise follows the OS
+  `prefers-color-scheme`. The Vuetify theme is injected into the shared theme
+  helper, so the Vuetify-less login page reuses the same preference without
+  bundling Vuetify.
+- **Refreshed main app**: server badge + persistent full-width search in the
+  sidebar, folder groups shown as labelled sections, smaller script names, a play
+  icon on the Execute button, and a GitHub-style dark console for script output.
+  A modern system-UI font stack replaces the heavier Roboto look.
+- **In-app tabs**: opening scripts now adds them to a persistent tab bar so you
+  can switch between several without leaving the app. Each tab keeps its entered
+  parameter values, and running executions stay alive when you switch tabs. Open
+  tabs are persisted to `localStorage`.
+
 ### 2026-06-17 — Code coverage measurement
 
 Both test suites now report coverage and upload it to [Codecov](https://codecov.io/gh/knep/script-server) under separate `python` / `frontend` flags.

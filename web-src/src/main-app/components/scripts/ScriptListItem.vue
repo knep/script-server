@@ -70,7 +70,19 @@ export default {
 </script>
 
 <style scoped>
+.script-list-item :deep(.v-list-item-title) {
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
 .script-list-item.parsing-failed :deep(.v-list-item-title) {
   color: var(--font-color-disabled);
+}
+
+.script-list-item.v-list-item--active :deep(.v-list-item-title) {
+  color: var(--primary-color);
+  font-weight: 500;
 }
 </style>

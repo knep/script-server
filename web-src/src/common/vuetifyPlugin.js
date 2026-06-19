@@ -34,6 +34,19 @@ export default createVuetify({
                     background: '#FFFFFF',
                     surface: '#FFFFFF'
                 }
+            },
+            scriptServerDark: {
+                dark: true,
+                colors: {
+                    // Teal accent is kept — it reads well on dark surfaces
+                    primary: '#26a69a',
+                    'primary-darken-1': '#00796B',
+                    secondary: '#26a69a',
+                    error: '#FF6B6B',
+                    // Mirror the dark --background-color / --surface-color
+                    background: '#1a1a1a',
+                    surface: '#242424'
+                }
             }
         }
     },

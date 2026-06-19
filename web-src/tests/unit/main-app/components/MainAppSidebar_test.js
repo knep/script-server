@@ -31,36 +31,36 @@ describe('Test MainAppSidebar', function () {
     describe('Test title', function () {
 
         it('test title from config', async function () {
-            const header = sidebar.find('.server-header');
+            const name = sidebar.find('.server-name');
 
-            expect(header.text()).toBe('Custom name');
+            expect(name.text()).toBe('Custom name');
         });
 
         it('test change title in config', async function () {
             useServerConfigStore().serverName = 'Another name';
             await vueTicks();
 
-            const header = sidebar.find('.server-header');
+            const name = sidebar.find('.server-name');
 
-            expect(header.text()).toBe('Another name');
+            expect(name.text()).toBe('Another name');
         });
 
         it('test default title when missing', async function () {
             useServerConfigStore().serverName = null;
             await vueTicks();
 
-            const header = sidebar.find('.server-header');
+            const name = sidebar.find('.server-name');
 
-            expect(header.text()).toBe('Script server');
+            expect(name.text()).toBe('Script server');
         });
 
         it('test long title', async function () {
             useServerConfigStore().serverName = 'Some very very long title';
             await vueTicks();
 
-            const header = sidebar.find('.server-header');
+            const name = sidebar.find('.server-name');
 
-            expect(header.classes()).toContain('header-gt-21-chars');
+            expect(name.classes()).toContain('header-gt-21-chars');
         });
     });
 

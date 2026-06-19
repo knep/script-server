@@ -8,7 +8,12 @@
         <router-view name="header"/>
       </template>
       <template v-slot:content>
-        <router-view/>
+        <div class="content-with-tabs">
+          <ScriptTabs/>
+          <div class="tabbed-content">
+            <router-view/>
+          </div>
+        </div>
       </template>
     </AppLayout>
     <DocumentTitleManager/>
@@ -25,6 +30,7 @@ import DocumentTitleManager from './components/DocumentTitleManager';
 import FaviconManager from './components/FaviconManager';
 import MainAppSidebar from './components/MainAppSidebar';
 import MainAppContent from './components/scripts/MainAppContent';
+import ScriptTabs from './components/scripts/ScriptTabs';
 import {usePageStore} from '@/main-app/stores/page'
 import {useAuthStore} from '@/common/stores/auth'
 import {useServerConfigStore} from '@/main-app/stores/serverConfig'
@@ -37,6 +43,7 @@ export default {
     AppLayout,
     MainAppSidebar,
     MainAppContent,
+    ScriptTabs,
     AppWelcomePanel,
     DocumentTitleManager,
     FaviconManager
@@ -68,5 +75,17 @@ export default {
 <style>
 h1, h2, h3, h4, h5, h6 {
   margin: 0;
+}
+
+.content-with-tabs {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.content-with-tabs > .tabbed-content {
+  flex: 1 1 0;
+  min-height: 0;
 }
 </style>

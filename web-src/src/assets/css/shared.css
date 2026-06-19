@@ -74,7 +74,7 @@
     --background-color-level-16dp: var(--background-color);
     --background-color-disabled: rgba(0, 0, 0, 0.12); /* disabled button */
 
-    --script-header-background: url('../titleBackground_small.jpg') center left / cover no-repeat;
+    --script-header-background: var(--background-color);
     --login-header-background: url('../titleBackground_login.jpg') center / cover no-repeat;
 
     --separator-color: #DDDDDD; /* borders between components */
@@ -83,6 +83,48 @@
     --outline-color-disabled: var(--background-color-disabled);
 
     --error-color: #F44336;
+
+    /* Typography: a modern system-UI stack (replaces the heavier Roboto look)
+       and a monospace stack for terminal/console output. */
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, 'Helvetica Neue', Arial, sans-serif;
+    --font-mono: 'SF Mono', 'JetBrains Mono', 'Fira Code', Menlo, Consolas, 'Liberation Mono', monospace;
+}
+
+/* Apply the sans stack app-wide. !important so it wins over Vuetify's own
+   .v-application font rule regardless of stylesheet import order. */
+body,
+.v-application {
+    font-family: var(--font-sans) !important;
+}
+
+/* ── Dark theme ─────────────────────────────────────────────────────────
+   Toggled by the `theme-dark` class on <html> (see common/utils/theme.js).
+   Mirrors the Vuetify scriptServerDark theme so custom-styled and Vuetify
+   components stay consistent. */
+html.theme-dark {
+    --hover-color: rgba(255, 255, 255, 0.06);
+    --focus-color: rgba(255, 255, 255, 0.12);
+    --focus-color-solid: #3a3a3a;
+
+    --font-color-main: rgba(255, 255, 255, 0.92);
+    --font-color-medium: rgba(255, 255, 255, 0.62);
+    --font-color-disabled: rgba(255, 255, 255, 0.40);
+
+    --primary-color-light-color: #18403c;
+    --font-on-primary-color-light--main: rgba(255, 255, 255, 0.92);
+
+    --surface-color: #2a2a2a; /* surface color and log panel color */
+
+    --background-color: #1a1a1a;
+    --background-color-slight-emphasis: rgba(255, 255, 255, 0.04);
+    --background-color-high-emphasis: rgba(255, 255, 255, 0.10);
+    --background-color-disabled: rgba(255, 255, 255, 0.12);
+
+    --separator-color: rgba(255, 255, 255, 0.14);
+
+    --outline-color: rgba(255, 255, 255, 0.30);
+
+    color-scheme: dark;
 }
 
 /* ── Minimal 12-column grid (replaces materialize _grid.scss) ─────────── */

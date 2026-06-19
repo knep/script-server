@@ -5,6 +5,7 @@
 <script>
 import {forEachKeyValue} from '@/common/utils/common';
 import {setDefaultFavicon, setExecutingFavicon} from './favicon_manager';
+import {useExecutionsStore} from '@/main-app/stores/executions';
 
 export default {
   name: 'FaviconManager',
@@ -13,7 +14,7 @@ export default {
   },
   computed: {
     hasExecuting() {
-      const executors = this.$store.state.executions.executors;
+      const executors = useExecutionsStore().executors;
 
       let hasExecuting = false;
 

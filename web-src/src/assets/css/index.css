@@ -55,6 +55,25 @@ h6.header {
     justify-content: center;
 }
 
+.theme-toggle-floating {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    font-size: 18px;
+    line-height: 40px;
+    cursor: pointer;
+}
+
+.theme-toggle-floating:hover {
+    background-color: var(--hover-color);
+}
+
 #login-panel {
     width: 300px;
     background-color: var(--background-color-level-4dp);

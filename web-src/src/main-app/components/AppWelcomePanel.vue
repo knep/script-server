@@ -56,11 +56,22 @@ export default {
   overflow: hidden;
 }
 
+.welcome-panel img {
+  width: 72px;
+  height: 72px;
+  opacity: 0.85;
+}
+
 .welcome-text {
-  margin-top: 15px;
+  margin-top: 16px;
+  font-size: 18px;
+  line-height: 1.5;
+  color: var(--font-color-main);
 }
 
 .welcome-cookie-text {
-  margin-top: 8px;
+  margin-top: 6px;
+  font-size: 14px;
+  color: var(--font-color-medium);
 }
 </style>

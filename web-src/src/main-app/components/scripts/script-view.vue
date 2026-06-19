@@ -5,6 +5,7 @@
     <ScriptParametersView ref="parametersView"/>
     <div class="actions-panel">
       <v-btn color="primary"
+             prepend-icon="play_arrow"
              :disabled="!enableExecuteButton || scheduleMode"
              class="button-execute"
              @click="executeScript">
@@ -492,26 +493,18 @@ export default {
 }
 
 .actions-panel {
-  margin-top: 8px;
+  margin-top: 16px;
   display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .actions-panel > .button-gap {
-  flex: 3 1 1px;
-}
-
-.button-execute {
-  flex: 4 1 312px;
-}
-
-.button-stop {
-  margin-left: 16px;
-  flex: 1 1 104px;
+  flex: 1 1 auto;
 }
 
 .schedule-button {
-  margin-left: 32px;
-  flex: 1 0 auto;
+  flex: 0 0 auto;
 }
 
 .script-input-panel {

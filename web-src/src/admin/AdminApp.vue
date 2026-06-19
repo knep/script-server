@@ -13,6 +13,7 @@
           <v-tab to="/logs">Logs</v-tab>
           <v-tab to="/scripts">Scripts</v-tab>
         </v-tabs>
+        <ThemeToggle color="white" class="theme-toggle"/>
       </div>
       <div v-if="subheader" class="subheader">{{ subheader }}</div>
     </div>
@@ -22,12 +23,13 @@
 
 <script>
 import File_upload from '@/common/components/file_upload'
+import ThemeToggle from '@/common/components/ThemeToggle'
 import {useAdminUiStore} from '@/admin/stores/ui'
 import {useAuthStore} from '@/common/stores/auth'
 
 export default {
   name: 'AdminApp',
-  components: {File_upload},
+  components: {File_upload, ThemeToggle},
 
   mounted() {
     useAuthStore().init()
@@ -93,6 +95,12 @@ export default {
 .home-button {
   flex-shrink: 0;
   margin: 0 4px;
+}
+
+.theme-toggle {
+  flex-shrink: 0;
+  margin-left: auto;
+  margin-right: 8px;
 }
 
 .subheader {

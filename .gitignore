@@ -92,3 +92,7 @@ e2e_venv/
 web-src/tests/e2e/.run/
 web-src/playwright-report/
 web-src/test-results/
+
+# Claude personal context (not shared)
+CLAUDE.local.md
+.claude/
