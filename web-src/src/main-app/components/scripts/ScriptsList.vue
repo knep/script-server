@@ -4,6 +4,16 @@
     open-strategy="single"
     class="scripts-list"
   >
+    <template v-if="favoriteScripts.length">
+      <v-list-subheader class="section-header">Favorites</v-list-subheader>
+      <ScriptListItem
+        v-for="script in favoriteScripts"
+        :key="'fav-' + script.name"
+        :script="script"
+      />
+      <v-divider class="favorites-divider" />
+    </template>
+
     <template v-for="item in items" :key="item.name">
       <ScriptListGroup v-if="item.isGroup" :group="item" />
       <ScriptListItem v-else :script="item" />
@@ -14,6 +24,7 @@
 <script>
 import {isBlankString, isEmptyArray, isEmptyString, isNull, removeElement} from '@/common/utils/common';
 import {useScriptsStore} from '@/main-app/stores/scripts'
+import {useScriptFavoritesStore} from '@/main-app/stores/scriptFavorites'
 import ScriptListGroup from './ScriptListGroup';
 import ScriptListItem from './ScriptListItem';
 
@@ -39,6 +50,20 @@ export default {
     },
     selectedScript() {
       return useScriptsStore().selectedScript
+    },
+
+    favoriteScripts() {
+      const favorites = useScriptFavoritesStore().favorites
+      const search = this.searchText
+      const byName = {}
+      for (const script of this.scripts) {
+        byName[script.name] = script
+      }
+      return favorites
+          .map(name => byName[name])
+          .filter(script => !isNull(script) && script !== undefined)
+          .filter(script =>
+              isEmptyString(search) || script.name.toLowerCase().includes(search.toLowerCase()))
     },
 
     items() {
@@ -96,5 +121,18 @@ export default {
   overflow: auto;
   overflow-wrap: normal;
   flex-grow: 1;
+}
+
+.section-header {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--font-color-medium);
+  min-height: 2rem;
+}
+
+.favorites-divider {
+  margin: 4px 0;
 }
 </style>

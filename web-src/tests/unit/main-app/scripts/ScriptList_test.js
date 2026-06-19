@@ -5,6 +5,7 @@ import router from '@/main-app/router/router';
 import {mount} from '@vue/test-utils';
 import {createPinia, setActivePinia} from 'pinia';
 import {useScriptsStore} from '@/main-app/stores/scripts';
+import {useScriptFavoritesStore} from '@/main-app/stores/scriptFavorites';
 import {attachToDocument, triggerSingleClick, vueTicks} from '../../test_utils';
 
 describe('Test ScriptConfig', function () {
@@ -251,5 +252,54 @@ describe('Test ScriptConfig', function () {
             assertOpenGroup(null);
         });
 
+    });
+
+    describe('Test favorites', function () {
+        function favoritesHeader() {
+            return listComponent.vm.$el.querySelector('.section-header');
+        }
+
+        function favoriteItemTitles() {
+            return [...listComponent.vm.$el.querySelectorAll('.v-list-item')]
+                .filter(el => el.querySelector('.favorite-toggle.is-favorite'))
+                .map(el => getItemTitle(el));
+        }
+
+        it('shows no Favorites section when there are none', async function () {
+            scriptsStore.scripts = [{'name': 'abc'}, {'name': 'xyz'}];
+            await vueTicks();
+
+            expect(favoritesHeader()).toBeFalsy();
+        });
+
+        it('shows a favorited script in the Favorites section', async function () {
+            scriptsStore.scripts = [{'name': 'abc'}, {'name': 'xyz', 'group': 'g1'}];
+            useScriptFavoritesStore().toggle('xyz');
+            await vueTicks();
+
+            expect(favoritesHeader().textContent.trim()).toBe('Favorites');
+            // 'xyz' appears once in the favorites section and once in its group
+            expect(favoriteItemTitles()).toEqual(['xyz', 'xyz']);
+        });
+
+        it('drops the section again when the last favorite is removed', async function () {
+            scriptsStore.scripts = [{'name': 'abc'}];
+            const favorites = useScriptFavoritesStore();
+            favorites.toggle('abc');
+            await vueTicks();
+            expect(favoritesHeader()).toBeTruthy();
+
+            favorites.toggle('abc');
+            await vueTicks();
+            expect(favoritesHeader()).toBeFalsy();
+        });
+
+        it('ignores favorites that no longer exist', async function () {
+            scriptsStore.scripts = [{'name': 'abc'}];
+            useScriptFavoritesStore().toggle('ghost');
+            await vueTicks();
+
+            expect(favoritesHeader()).toBeFalsy();
+        });
     });
 });
