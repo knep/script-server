@@ -11,6 +11,16 @@
              @click="executeScript">
         Execute
       </v-btn>
+      <v-btn v-if="hasLastExecution"
+             variant="text"
+             color="primary"
+             prepend-icon="replay"
+             :disabled="!enableExecuteButton || scheduleMode"
+             class="button-replay"
+             title="Re-run with the parameters of the last execution"
+             @click="replayLastExecution">
+        Replay
+      </v-btn>
       <v-btn :disabled="!enableStopButton"
              :color="killEnabled ? 'red-darken-3' : 'red-lighten-1'"
              class="button-stop"
@@ -63,6 +73,7 @@
 
 import LogPanel from '@/common/components/log_panel'
 import {deepCloneObject, forEachKeyValue, isEmptyObject, isEmptyString, isNull} from '@/common/utils/common';
+import {getMostRecentValues} from '@/common/utils/parameterHistory';
 import ScheduleButton from '@/main-app/components/scripts/ScheduleButton';
 import ScriptLoadingText from '@/main-app/components/scripts/ScriptLoadingText';
 import ScriptViewScheduleHolder from '@/main-app/components/scripts/ScriptViewScheduleHolder';
@@ -137,6 +148,13 @@ export default {
     },
     selectedScript() {
       return useScriptsStore().selectedScript
+    },
+
+    hasLastExecution() {
+      // Touch currentExecutor so this recomputes after an execution starts
+      // (parameter history has no reactive dependency of its own).
+      this.currentExecutor;
+      return !isNull(this.selectedScript) && !isNull(getMostRecentValues(this.selectedScript));
     },
 
     hasErrors: function () {
@@ -322,6 +340,24 @@ export default {
       if (!this.validatePreExecution()) {
         return;
       }
+
+      this.requestNotificationPermission();
+      this.startExecution();
+    },
+
+    replayLastExecution: function () {
+      const values = getMostRecentValues(this.selectedScript);
+      if (isNull(values)) {
+        return;
+      }
+
+      // Restore the last run's values into the form, then execute. reloadModel
+      // sets parameterValues synchronously, so startExecution picks them up.
+      useScriptSetupStore().reloadModel({
+        values: deepCloneObject(values),
+        forceAllowedValues: true,
+        scriptName: this.selectedScript
+      });
 
       this.requestNotificationPermission();
       this.startExecution();

@@ -17,6 +17,8 @@ Builds on the in-app tabs to make working with several scripts at once smoother.
   requested from the Execute click).
 - **Keyboard shortcuts**: `Ctrl`/`Cmd`+`Enter` to run the current script,
   `Alt`+`←`/`→` to switch tabs, `Alt`+`W` to close the active tab.
+- **Replay last execution**: a one-click button to re-run a script with the
+  parameters of its most recent execution (shown when history exists).
 
 ### 2026-06-19 — UI refresh, dark mode and in-app tabs
 
