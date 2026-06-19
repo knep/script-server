@@ -1,6 +1,6 @@
 <template>
   <v-btn
-    :icon="dark ? 'light_mode' : 'dark_mode'"
+    :icon="dark ? 'brightness_7' : 'brightness_2'"
     :title="dark ? 'Switch to light mode' : 'Switch to dark mode'"
     variant="text"
     :color="color"
