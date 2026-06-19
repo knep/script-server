@@ -1,6 +1,10 @@
 <template>
   <div class="log-panel">
-    <div class="log-panel-shadow"
+    <div class="log-panel-header">
+      <v-icon :size="16">terminal</v-icon>
+      <span>Output</span>
+    </div>
+    <div ref="shadow" class="log-panel-shadow"
          v-bind:class="{
              'shadow-top': !atTop && atBottom,
              'shadow-bottom': atTop && !atBottom,
@@ -154,7 +158,7 @@ export default {
       terminal.addEventListener('mousedown', () => this.mouseDown = true);
       terminal.addEventListener('mouseup', () => this.mouseDown = false);
 
-      this.$el.insertBefore(terminal, this.$el.children[0]);
+      this.$el.insertBefore(terminal, this.$refs.shadow);
 
       this.revalidateScroll()
     }
@@ -204,12 +208,36 @@ export default {
   position: relative;
   min-height: 0;
 
-  background: var(--surface-color);
+  display: flex;
+  flex-direction: column;
+
+  background: #0d1117;
 
   width: 100%;
 
-  border: solid 1px var(--separator-color);
-  border-radius: 2px;
+  border: solid 1px #30363d;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.log-panel-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  padding: 6px 12px;
+  background: #161b22;
+  border-bottom: 1px solid #30363d;
+
+  color: #768390;
+  font-size: 12px;
+  font-family: var(--font-sans);
+  user-select: none;
+}
+
+.log-panel-header :deep(.v-icon) {
+  color: #768390;
 }
 
 .log-panel-shadow {
@@ -246,7 +274,7 @@ export default {
 }
 
 .log-panel .copy-text-button i {
-  color: var(--font-color-disabled);
+  color: #768390;
 }
 
 .log-panel .download-text-button {
@@ -256,19 +284,22 @@ export default {
 }
 
 .log-panel .download-text-button i {
-  color: var(--font-color-disabled);
+  color: #768390;
 }
 
 /*noinspection CssInvalidPropertyValue,CssOverwrittenProperties*/
 .log-panel :deep(.log-content) {
   display: block;
   overflow-y: auto;
-  height: 100%;
+  flex: 1 1 0;
+  min-height: 0;
   width: 100%;
 
+  color: #adbac7;
+  font-family: var(--font-mono);
   font-size: .875em;
 
-  padding: 1.5em;
+  padding: 1.25em 1.5em;
 
   white-space: pre-wrap; /* CSS 3 */
   white-space: -moz-pre-wrap; /* Mozilla, since 1999 */

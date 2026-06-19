@@ -83,6 +83,18 @@
     --outline-color-disabled: var(--background-color-disabled);
 
     --error-color: #F44336;
+
+    /* Typography: a modern system-UI stack (replaces the heavier Roboto look)
+       and a monospace stack for terminal/console output. */
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, 'Helvetica Neue', Arial, sans-serif;
+    --font-mono: 'SF Mono', 'JetBrains Mono', 'Fira Code', Menlo, Consolas, 'Liberation Mono', monospace;
+}
+
+/* Apply the sans stack app-wide. !important so it wins over Vuetify's own
+   .v-application font rule regardless of stylesheet import order. */
+body,
+.v-application {
+    font-family: var(--font-sans) !important;
 }
 
 /* ── Dark theme ─────────────────────────────────────────────────────────

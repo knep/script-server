@@ -2,6 +2,7 @@
   <v-list-item
     :to="'/' + descriptor.hash"
     :title="descriptor.name"
+    prepend-icon="chevron_right"
     :class="{ 'parsing-failed': descriptor.parsingFailed }"
     class="script-list-item"
   >
@@ -72,5 +73,17 @@ export default {
 <style scoped>
 .script-list-item.parsing-failed :deep(.v-list-item-title) {
   color: var(--font-color-disabled);
+}
+
+.script-list-item :deep(.v-list-item__prepend > .v-icon) {
+  color: var(--font-color-medium);
+  opacity: 0.7;
+  font-size: 20px;
+}
+
+.script-list-item.v-list-item--active :deep(.v-list-item__prepend > .v-icon),
+.script-list-item.v-list-item--active :deep(.v-list-item-title) {
+  color: var(--primary-color);
+  opacity: 1;
 }
 </style>

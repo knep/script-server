@@ -5,6 +5,7 @@
     <ScriptParametersView ref="parametersView"/>
     <div class="actions-panel">
       <v-btn color="primary"
+             prepend-icon="play_arrow"
              :disabled="!enableExecuteButton || scheduleMode"
              class="button-execute"
              @click="executeScript">
