@@ -95,6 +95,11 @@ export default {
 
   mounted: function () {
     this.id = 'script-panel-' + this.$.uid;
+    window.addEventListener('keydown', this.handleExecuteShortcut);
+  },
+
+  beforeUnmount: function () {
+    window.removeEventListener('keydown', this.handleExecuteShortcut);
   },
 
   components: {
@@ -294,11 +299,31 @@ export default {
       return true;
     },
 
+    handleExecuteShortcut: function (event) {
+      if (event.key !== 'Enter' || !(event.ctrlKey || event.metaKey)) {
+        return;
+      }
+      if (!this.enableExecuteButton || this.scheduleMode) {
+        return;
+      }
+      event.preventDefault();
+      this.executeScript();
+    },
+
+    requestNotificationPermission: function () {
+      // Called from the Execute click (a user gesture) so the browser allows the
+      // permission prompt. Used by ExecutionNotifier for background completions.
+      if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+        Notification.requestPermission().catch(() => {});
+      }
+    },
+
     executeScript: function () {
       if (!this.validatePreExecution()) {
         return;
       }
 
+      this.requestNotificationPermission();
       this.startExecution();
     },
 
