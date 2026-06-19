@@ -3,7 +3,7 @@
     :icon="dark ? 'light_mode' : 'dark_mode'"
     :title="dark ? 'Switch to light mode' : 'Switch to dark mode'"
     variant="text"
-    color="primary"
+    :color="color"
     density="compact"
     @click="toggle"
   />
@@ -14,6 +14,12 @@ import {isDarkActive, toggleTheme} from '@/common/utils/theme'
 
 export default {
   name: 'ThemeToggle',
+  props: {
+    color: {
+      type: String,
+      default: 'primary'
+    }
+  },
   data() {
     return {
       dark: isDarkActive()

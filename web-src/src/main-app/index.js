@@ -10,7 +10,7 @@ import MainApp from './MainApp.vue';
 import router from './router/router'
 import vueDirectives from '@/common/vueDirectives'
 import vuetify from '@/common/vuetifyPlugin'
-import {initTheme} from '@/common/utils/theme'
+import {initTheme, registerVuetifyTheme} from '@/common/utils/theme'
 import {forEachKeyValue} from '@/common/utils/common';
 import {useAuthStore} from '@/common/stores/auth';
 import {useScriptsStore} from '@/main-app/stores/scripts';
@@ -29,6 +29,7 @@ app.use(pinia)
 app.use(router)
 app.use(vuetify)
 
+registerVuetifyTheme(vuetify.theme.global)
 initTheme()
 
 const scriptsStore = useScriptsStore()

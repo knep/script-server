@@ -13,7 +13,13 @@ import {
     removeClass,
     toQueryArgs
 } from '@/common/utils/common';
+import {initTheme, isDarkActive, toggleTheme} from '@/common/utils/theme'
 import get from 'lodash/get'
+
+// Apply the persisted (or OS-preferred) theme before the page renders, so the
+// login screen matches the rest of the app. The login page has no Vuetify, so
+// only the <html> class is toggled (see common/utils/theme.js).
+initTheme();
 
 var NEXT_URL_KEY = 'next';
 var OAUTH_RESPONSE_KEY = 'code';
@@ -22,6 +28,26 @@ var loginMethod = 'POST';
 var loginUrl = 'login';
 
 window.onload = onLoad;
+
+function setupThemeToggle() {
+    const button = document.createElement('button');
+    button.className = 'theme-toggle-floating';
+    button.type = 'button';
+
+    const render = () => {
+        const dark = isDarkActive();
+        button.textContent = dark ? '☀️' : '🌙';
+        button.title = dark ? 'Switch to light mode' : 'Switch to dark mode';
+    };
+    render();
+
+    button.addEventListener('click', () => {
+        toggleTheme();
+        render();
+    });
+
+    document.body.appendChild(button);
+}
 
 function checkRedirectReason() {
     let redirectReason = getQueryParameter('redirectReason');
@@ -40,6 +66,8 @@ function validateURL(url) {
 }
 
 function onLoad() {
+    setupThemeToggle();
+
     axiosInstance.get('auth/config').then(({data: config}) => {
         const loginContainer = document.getElementById('login-content-container');
 
