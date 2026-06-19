@@ -25,6 +25,25 @@ export const useExecutionsStore = defineStore('executions', {
     },
 
     actions: {
+        // Aggregated status of all executions for a given script, by priority:
+        // running > error > finished > none. Used by the tab status indicators.
+        getScriptStatus(scriptName) {
+            const statuses = Object.values(this.executors)
+                .filter(e => e.state.scriptName === scriptName)
+                .map(e => e.state.status)
+
+            if (statuses.includes(STATUS_EXECUTING) || statuses.includes(STATUS_INITIALIZING)) {
+                return 'running'
+            }
+            if (statuses.includes(STATUS_ERROR) || statuses.includes(STATUS_DISCONNECTED)) {
+                return 'error'
+            }
+            if (statuses.includes(STATUS_FINISHED)) {
+                return 'finished'
+            }
+            return null
+        },
+
         init() {
             axiosInstance.get('executions/active')
                 .then(({data: activeExecutionIds}) => {

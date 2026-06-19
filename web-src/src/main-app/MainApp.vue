@@ -18,6 +18,7 @@
     </AppLayout>
     <DocumentTitleManager/>
     <FaviconManager/>
+    <ExecutionNotifier/>
   </div>
 </template>
 
@@ -31,6 +32,9 @@ import FaviconManager from './components/FaviconManager';
 import MainAppSidebar from './components/MainAppSidebar';
 import MainAppContent from './components/scripts/MainAppContent';
 import ScriptTabs from './components/scripts/ScriptTabs';
+import ExecutionNotifier from './components/ExecutionNotifier';
+import {scriptNameToHash} from './utils/model_helper';
+import {useScriptTabsStore} from '@/main-app/stores/scriptTabs';
 import {usePageStore} from '@/main-app/stores/page'
 import {useAuthStore} from '@/common/stores/auth'
 import {useServerConfigStore} from '@/main-app/stores/serverConfig'
@@ -44,6 +48,7 @@ export default {
     MainAppSidebar,
     MainAppContent,
     ScriptTabs,
+    ExecutionNotifier,
     AppWelcomePanel,
     DocumentTitleManager,
     FaviconManager
@@ -68,6 +73,44 @@ export default {
     this.$router.afterEach((to) => {
       this.$refs.appLayout.setSidebarVisibility(false);
     });
+
+    window.addEventListener('keydown', this.handleTabShortcuts);
+  },
+
+  beforeUnmount() {
+    window.removeEventListener('keydown', this.handleTabShortcuts);
+  },
+
+  methods: {
+    // Tab navigation shortcuts. Uses Alt-based combos: Ctrl+W / Ctrl+Tab are
+    // reserved by the browser and can't be reliably intercepted.
+    handleTabShortcuts(event) {
+      if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+        return;
+      }
+
+      const tabsStore = useScriptTabsStore();
+      const openTabs = tabsStore.openTabs;
+      const activeScript = useScriptsStore().selectedScript;
+
+      if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+        if (openTabs.length === 0) {
+          return;
+        }
+        event.preventDefault();
+        const step = event.key === 'ArrowRight' ? 1 : -1;
+        let index = openTabs.indexOf(activeScript);
+        index = index === -1 ? 0 : (index + step + openTabs.length) % openTabs.length;
+        this.$router.push('/' + scriptNameToHash(openTabs[index]));
+      } else if (event.key === 'w' || event.key === 'W') {
+        if (isEmptyString(activeScript)) {
+          return;
+        }
+        event.preventDefault();
+        const nextScript = tabsStore.closeTab(activeScript);
+        this.$router.push(nextScript ? '/' + scriptNameToHash(nextScript) : '/');
+      }
+    }
   }
 }
 </script>

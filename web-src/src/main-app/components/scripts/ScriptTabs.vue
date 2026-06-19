@@ -14,6 +14,25 @@
       class="script-tab"
       @click="activate(scriptName)"
     >
+      <v-progress-circular
+        v-if="statusFor(scriptName) === 'running'"
+        class="tab-status"
+        :size="13"
+        :width="2"
+        color="primary"
+        indeterminate
+      />
+      <v-icon
+        v-else-if="statusFor(scriptName) === 'finished'"
+        class="tab-status status-finished"
+        size="15"
+      >check_circle</v-icon>
+      <v-icon
+        v-else-if="statusFor(scriptName) === 'error'"
+        class="tab-status status-error"
+        size="15"
+      >error</v-icon>
+
       <span class="tab-label">{{ scriptName }}</span>
       <v-icon
         class="tab-close"
@@ -28,6 +47,7 @@
 <script>
 import {useScriptTabsStore} from '@/main-app/stores/scriptTabs'
 import {useScriptsStore} from '@/main-app/stores/scripts'
+import {useExecutionsStore} from '@/main-app/stores/executions'
 import {scriptNameToHash} from '@/main-app/utils/model_helper'
 
 export default {
@@ -41,6 +61,9 @@ export default {
     }
   },
   methods: {
+    statusFor(scriptName) {
+      return useExecutionsStore().getScriptStatus(scriptName)
+    },
     activate(scriptName) {
       if (scriptName === this.activeScript) {
         return
@@ -76,6 +99,19 @@ export default {
 
 .script-tab.v-tab--selected {
   color: var(--primary-color);
+}
+
+.tab-status {
+  margin-right: 6px;
+  flex-shrink: 0;
+}
+
+.tab-status.status-finished {
+  color: var(--primary-color);
+}
+
+.tab-status.status-error {
+  color: var(--error-color);
 }
 
 .tab-label {

@@ -5,6 +5,21 @@
 
 ## What's new in this fork
 
+### 2026-06-19 — Multi-tab workflow: status, notifications, shortcuts
+
+Builds on the in-app tabs to make working with several scripts at once smoother.
+
+- **Per-tab status indicator**: each tab shows the aggregated status of its
+  script's executions — a spinner while running, a check when finished, an error
+  icon on failure — so background tabs are readable at a glance.
+- **Completion notifications**: an in-app snackbar when a script finishes or
+  fails, plus a native browser notification when the app isn't focused (permission
+  requested from the Execute click).
+- **Keyboard shortcuts**: `Ctrl`/`Cmd`+`Enter` to run the current script,
+  `Alt`+`←`/`→` to switch tabs, `Alt`+`W` to close the active tab.
+- **Replay last execution**: a one-click button to re-run a script with the
+  parameters of its most recent execution (shown when history exists).
+
 ### 2026-06-19 — UI refresh, dark mode and in-app tabs
 
 A visual refresh of the main app, a dark theme, and the ability to keep several
