@@ -45,6 +45,44 @@ jobs:
           flags: python
           name: python-coverage
 
+  security-scan:
+    name: Security scan
+    runs-on: ubuntu-latest
+    # Informational only — like Codecov, this never fails CI. It surfaces known
+    # dependency vulnerabilities (Python + frontend) in the job logs.
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web-src/package-lock.json
+
+      - name: Audit Python dependencies (pip-audit)
+        continue-on-error: true
+        run: |
+          pip install pip-audit
+          pip-audit --requirement requirements.txt --desc
+
+      - name: Audit frontend dependencies (npm audit)
+        continue-on-error: true
+        working-directory: web-src
+        run: |
+          echo "::group::Production dependencies"
+          npm audit --omit=dev || true
+          echo "::endgroup::"
+          echo "::group::All dependencies (incl. dev/build tooling)"
+          npm audit || true
+          echo "::endgroup::"
+
   frontend-tests:
     name: Frontend (Node 22)
     runs-on: ubuntu-latest
