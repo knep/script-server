@@ -3,6 +3,7 @@ import os
 import shutil
 import stat
 import threading
+import time
 import uuid
 from copy import copy
 from unittest.case import TestCase
@@ -89,21 +90,36 @@ def cleanup():
 
 
 def _rmtree(folder):
-    exception = None
+    # Some tests upload files via background threads that may still be writing
+    # into the temp folder when teardown starts. A file appearing between
+    # rmtree's scandir and rmdir leaves the directory non-empty, so the removal
+    # fails transiently. Retry a few times to let those threads finish before
+    # giving up.
+    attempts = 20
+    for attempt in range(attempts):
+        errors = []
 
-    def on_rm_error(func, path, exc_info):
-        try:
-            os.chmod(path, stat.S_IWRITE | stat.S_IEXEC | stat.S_IREAD)
-            os.remove(path)
-        except Exception as e:
-            print('Failed to remove path ' + path + ': ' + str(e))
-            nonlocal exception
-            if exception is None:
-                exception = e
+        def on_rm_error(func, path, exc_info):
+            try:
+                os.chmod(path, stat.S_IWRITE | stat.S_IEXEC | stat.S_IREAD)
+                # Re-run the operation that failed (os.unlink for files,
+                # os.rmdir for directories, ...). The previous code always
+                # called os.remove, which raised IsADirectoryError on dirs.
+                func(path)
+            except Exception as e:
+                errors.append(e)
 
-    shutil.rmtree(folder, onerror=on_rm_error)
-    if exception:
-        raise exception
+        shutil.rmtree(folder, onerror=on_rm_error)
+
+        if not os.path.exists(folder):
+            return
+
+        if attempt < attempts - 1:
+            time.sleep(0.05)
+
+    if errors:
+        raise errors[0]
+    raise OSError('Failed to remove ' + folder + ' after ' + str(attempts) + ' attempts')
 
 
 def set_linux():
