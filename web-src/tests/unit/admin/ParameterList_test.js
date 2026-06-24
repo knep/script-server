@@ -359,4 +359,23 @@ describe('Test ScriptParamList', function () {
         });
     });
 
+    describe('Test header layout', function () {
+        // Regression: the param name used to be a second flex child of the
+        // expansion title (justify-content: space-between), which pushed it to
+        // the far right, on top of the action buttons. Icon + name must stay
+        // grouped in .param-title so the text renders on the left.
+        it('keeps the icon and name grouped on the left', function () {
+            const item = findParamItem('param 1');
+            expect(item).not.toBeNil();
+
+            const title = item.element.querySelector('.param-title');
+            expect(title).toBeTruthy();
+
+            const name = title.querySelector('.param-name');
+            expect(name).toBeTruthy();
+            expect(name.textContent.trim()).toBe('param 1');
+            expect(title.querySelector('.v-icon')).toBeTruthy();
+        });
+    });
+
 });

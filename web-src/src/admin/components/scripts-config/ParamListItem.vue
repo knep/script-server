@@ -1,10 +1,12 @@
 <template>
   <v-expansion-panel :value="panelValue" class="param-list-item">
     <v-expansion-panel-title hide-actions class="param-header">
-      <v-icon :color="errorText ? 'error' : undefined" :title="errorText" size="small">
-        {{ errorText ? 'warning' : 'unfold_more' }}
-      </v-icon>
-      <span :class="{'text-error': errorText}" class="ml-2">{{ param.name }}</span>
+      <div class="param-title">
+        <v-icon :color="errorText ? 'error' : undefined" :title="errorText" size="small">
+          {{ errorText ? 'warning' : 'unfold_more' }}
+        </v-icon>
+        <span :class="{'text-error': errorText}" class="param-name ml-2">{{ param.name }}</span>
+      </div>
     </v-expansion-panel-title>
     <div class="param-actions">
       <v-btn icon="delete" variant="text" density="compact" @click="$emit('delete')"/>
@@ -75,6 +77,27 @@ export default {
 <style scoped>
 .param-list-item {
   position: relative;
+}
+
+/* Reserve room on the right for the absolutely-positioned action buttons so the
+   parameter name can't slide under them. */
+.param-header {
+  padding-right: 130px;
+}
+
+/* Keep the icon + name together on the left (the title defaults to
+   justify-content: space-between, which otherwise pushes the name to the far
+   right, on top of the action buttons). */
+.param-title {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.param-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .param-actions {
