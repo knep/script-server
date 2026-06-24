@@ -39,7 +39,9 @@ export default {
 
   data() {
     return {
-      newScriptPath: NEW_SCRIPT
+      // Absolute path: a bare relative "_new" would be resolved against the
+      // current /scripts route and fall through to the catch-all redirect (/logs).
+      newScriptPath: '/scripts/' + NEW_SCRIPT
     }
   },
 
