@@ -5,6 +5,13 @@
 
 ## What's new in this fork
 
+### 2026-06-24 — Dependency security scan in CI
+
+A `Security scan` job audits dependencies on every push/PR: `pip-audit` for the
+Python requirements and `npm audit` for the frontend (production deps reported
+separately from dev/build tooling). It is **informational** — like Codecov, it
+never fails CI; findings are surfaced in the job logs.
+
 ### 2026-06-19 — Favorite scripts
 
 Scripts can be pinned as favorites for quick access. A star button on each script
