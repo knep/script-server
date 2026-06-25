@@ -5,6 +5,12 @@
 
 ## What's new in this fork
 
+### 2026-06-25 — Resizable sidebar
+
+The scripts sidebar can now be resized: drag the handle on its right edge to set
+the width (between 220 and 600 px), or double-click the handle to reset it to the
+default 300 px. The chosen width is persisted in `localStorage`.
+
 ### 2026-06-25 — Search in script output
 
 The output panel now has a find bar (search icon in the "Output" header): type to
