@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import asyncio
+import http.cookies
 import json
 import logging.config
 import os
@@ -834,6 +835,32 @@ def intercept_stop_when_running_scripts(io_loop, execution_service):
 _http_server = None
 
 
+def build_xsrf_cookie_kwargs(cookie_secure, samesite_supported=None):
+    # The SameSite cookie attribute is only understood by http.cookies (and thus
+    # Tornado's set_cookie) on Python 3.8+. On older interpreters setting it
+    # raises http.cookies.CookieError ("Invalid attribute 'samesite'"), which
+    # 500s every response that sets the XSRF cookie — including the login page.
+    # Only add it where supported; the double-submit XSRF token protection
+    # applies regardless of SameSite.
+    if samesite_supported is None:
+        # http.cookies.Morsel._reserved lists the attributes the interpreter
+        # accepts; 'samesite' was added in Python 3.8.
+        samesite_supported = 'samesite' in http.cookies.Morsel._reserved
+
+    kwargs = {
+        # The XSRF cookie is a double-submit CSRF token, not a secret: in token
+        # mode (the default) the browser JS must read it and echo it back in the
+        # X-XSRFToken header. It therefore must NOT be httponly, otherwise every
+        # POST (e.g. starting an execution) is rejected with 403 "_xsrf argument
+        # missing".
+        'httponly': False,
+        'secure': cookie_secure,
+    }
+    if samesite_supported:
+        kwargs['samesite'] = 'Lax'
+    return kwargs
+
+
 def init(server_config: ServerConfig,
          authenticator,
          authorizer,
@@ -902,16 +929,7 @@ def init(server_config: ServerConfig,
         'websocket_ping_timeout': 300,
         'compress_response': True,
         'xsrf_cookies': server_config.xsrf_protection != XSRF_PROTECTION_DISABLED,
-        'xsrf_cookie_kwargs': {
-            # The XSRF cookie is a double-submit CSRF token, not a secret: in
-            # token mode (the default) the browser JS must read it and echo it
-            # back in the X-XSRFToken header. It therefore must NOT be httponly,
-            # otherwise every POST (e.g. starting an execution) is rejected with
-            # 403 "_xsrf argument missing".
-            'httponly': False,
-            'secure': server_config.cookie_secure,
-            'samesite': 'Lax'
-        },
+        'xsrf_cookie_kwargs': build_xsrf_cookie_kwargs(server_config.cookie_secure),
     }
 
     application = tornado.web.Application(handlers, **settings)
