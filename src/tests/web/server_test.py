@@ -431,3 +431,29 @@ class ServerTest(TestCase):
         self.ioloop_thread.join(timeout=50)
         io_loop.close()
         asyncio.set_event_loop(None)
+
+
+class BuildXsrfCookieKwargsTest(TestCase):
+    def test_includes_samesite_when_supported(self):
+        kwargs = server.build_xsrf_cookie_kwargs(True, samesite_supported=True)
+        self.assertEqual('Lax', kwargs.get('samesite'))
+        self.assertFalse(kwargs['httponly'])
+        self.assertTrue(kwargs['secure'])
+
+    def test_omits_samesite_when_unsupported(self):
+        # Reproduces Python < 3.8 (e.g. 3.6): setting samesite would raise
+        # http.cookies.CookieError and 500 the login page.
+        kwargs = server.build_xsrf_cookie_kwargs(True, samesite_supported=False)
+        self.assertNotIn('samesite', kwargs)
+        self.assertFalse(kwargs['httponly'])
+        self.assertTrue(kwargs['secure'])
+
+    def test_passes_cookie_secure_through(self):
+        self.assertFalse(server.build_xsrf_cookie_kwargs(False, samesite_supported=False)['secure'])
+        self.assertTrue(server.build_xsrf_cookie_kwargs(True, samesite_supported=False)['secure'])
+
+    def test_default_detection_matches_interpreter(self):
+        import http.cookies
+        expected = 'samesite' in http.cookies.Morsel._reserved
+        kwargs = server.build_xsrf_cookie_kwargs(True)
+        self.assertEqual(expected, 'samesite' in kwargs)
