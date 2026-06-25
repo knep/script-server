@@ -5,6 +5,14 @@
 
 ## What's new in this fork
 
+### 2026-06-25 — Search in script output
+
+The output panel now has a find bar (search icon in the "Output" header): type to
+highlight all matches in the log, with a match counter and previous/next
+navigation (Enter / Shift+Enter, Esc to close). Matches are highlighted via the
+CSS Custom Highlight API, so the live-appending terminal and inline images are
+left untouched. Available wherever logs are shown (execution view and history).
+
 ### 2026-06-24 — Dependency security scan in CI
 
 A `Security scan` job audits dependencies on every push/PR: `pip-audit` for the
