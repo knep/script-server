@@ -1,7 +1,7 @@
 <template>
   <div class="app-layout">
     <div ref="appSidebar" :class="{collapsed: !showSidebar}" class="app-sidebar shadow-8dp"
-         :style="{width: sidebarWidth + 'px'}">
+         :style="sidebarStyle">
       <slot name="sidebar"/>
     </div>
     <div v-show="!narrowView"
@@ -72,6 +72,15 @@ export default {
       showSidebar: false,
       hasHeader: false,
       sidebarWidth: DEFAULT_SIDEBAR_WIDTH
+    }
+  },
+
+  computed: {
+    sidebarStyle() {
+      // The custom (resizable) width only applies to the desktop layout. In the
+      // narrow/overlay layout the width is set by CSS (capped to the viewport),
+      // so a wide desktop width doesn't overflow a phone screen.
+      return this.narrowView ? {} : {width: this.sidebarWidth + 'px'};
     }
   },
   mounted() {
@@ -286,6 +295,11 @@ function updatedStylesBasedOnContent(contentHeader, contentPanel, appLayout) {
     height: 100vh;
     z-index: 999;
     transition: transform 0.3s;
+
+    /* Overlay width is viewport-driven here (the inline desktop width is not
+       applied in narrow view), so it never overflows a phone screen. */
+    width: 300px;
+    max-width: 85vw;
   }
 
   .app-sidebar.collapsed {

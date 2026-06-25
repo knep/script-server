@@ -107,4 +107,18 @@ describe('Test AppLayout resizable sidebar', function () {
         layout = mountLayout();
         expect(layout.find('.sidebar-resizer').exists()).toBe(true);
     });
+
+    it('does not apply the custom width in narrow (overlay) view', async function () {
+        vi.stubGlobal('localStorage', inMemoryLocalStorage({[KEY]: '600'}));
+        layout = mountLayout();
+
+        // Desktop: width applied inline.
+        expect(layout.vm.sidebarStyle).toEqual({width: '600px'});
+
+        // Narrow/overlay: width is left to CSS so it can't overflow the screen.
+        layout.vm.narrowView = true;
+        await layout.vm.$nextTick();
+        expect(layout.vm.sidebarStyle).toEqual({});
+        expect(layout.find('.app-sidebar').attributes('style') || '').not.toContain('width: 600px');
+    });
 });
