@@ -3,6 +3,29 @@
     <div class="log-panel-header">
       <v-icon :size="16">terminal</v-icon>
       <span>Output</span>
+
+      <div class="log-search">
+        <template v-if="searchActive">
+          <input
+            ref="searchInput"
+            v-model="searchQuery"
+            class="log-search-input"
+            type="text"
+            placeholder="Find in output"
+            spellcheck="false"
+            autocomplete="off"
+            @keydown.enter.prevent="$event.shiftKey ? prevMatch() : nextMatch()"
+            @keydown.esc.prevent="closeSearch"
+          />
+          <span class="log-search-count">{{ matchCountLabel }}</span>
+          <v-icon class="log-search-btn" size="16" title="Previous match (Shift+Enter)"
+                  :class="{disabled: matchCount === 0}" @click="prevMatch">keyboard_arrow_up</v-icon>
+          <v-icon class="log-search-btn" size="16" title="Next match (Enter)"
+                  :class="{disabled: matchCount === 0}" @click="nextMatch">keyboard_arrow_down</v-icon>
+          <v-icon class="log-search-btn" size="16" title="Close (Esc)" @click="closeSearch">close</v-icon>
+        </template>
+        <v-icon v-else class="log-search-btn" size="16" title="Search output" @click="openSearch">search</v-icon>
+      </div>
     </div>
     <div ref="shadow" class="log-panel-shadow"
          v-bind:class="{
@@ -25,6 +48,7 @@ import {TerminalOutput} from '@/common/components/terminal/ansi/TerminalOutput'
 import {TextOutput} from '@/common/components/terminal/text/TextOutput'
 import {HtmlIFrameOutput} from '@/common/components/terminal/html/HtmlIFrameOutput'
 import {HtmlOutput} from '@/common/components/terminal/html/HtmlOutput'
+import {applyHighlights, clearHighlights, findTextMatches} from '@/common/components/terminal/logSearch'
 
 export default {
   props: {
@@ -44,7 +68,21 @@ export default {
       mouseDown: false,
       scrollUpdater: null,
       needScrollUpdate: false,
-      text: ''
+      text: '',
+      searchActive: false,
+      searchQuery: '',
+      searchRanges: [],
+      matchCount: 0,
+      currentMatch: 0
+    }
+  },
+
+  computed: {
+    matchCountLabel: function () {
+      if (this.matchCount === 0) {
+        return this.searchQuery ? '0/0' : '';
+      }
+      return (this.currentMatch + 1) + '/' + this.matchCount;
     }
   },
 
@@ -117,6 +155,27 @@ export default {
       this.output.write(text);
 
       this.revalidateScroll();
+
+      if (this.searchActive && this.searchQuery) {
+        // New output may contain (or shift) matches — refresh, preserving the
+        // current position by index.
+        this.scheduleSearchRefresh();
+      }
+    },
+
+    scheduleSearchRefresh: function () {
+      if (this._searchRefreshScheduled) {
+        return;
+      }
+      this._searchRefreshScheduled = true;
+      this.$nextTick(() => {
+        this._searchRefreshScheduled = false;
+        const previous = this.currentMatch;
+        this.searchRanges = findTextMatches(this.output.element, this.searchQuery);
+        this.matchCount = this.searchRanges.length;
+        this.currentMatch = Math.min(previous, Math.max(0, this.matchCount - 1));
+        applyHighlights(this.searchRanges, this.matchCount ? this.currentMatch : -1);
+      });
     },
 
     removeInlineImage: function (output_path) {
@@ -144,6 +203,76 @@ export default {
       URL.revokeObjectURL(url);
     },
 
+    openSearch: function () {
+      this.searchActive = true;
+      this.$nextTick(() => {
+        if (this.$refs.searchInput) {
+          this.$refs.searchInput.focus();
+        }
+      });
+    },
+
+    closeSearch: function () {
+      this.searchActive = false;
+      this.searchQuery = '';
+      this.searchRanges = [];
+      this.matchCount = 0;
+      this.currentMatch = 0;
+      clearHighlights();
+    },
+
+    runSearch: function () {
+      if (!this.output || !this.output.element || !this.searchQuery) {
+        this.searchRanges = [];
+        this.matchCount = 0;
+        this.currentMatch = 0;
+        clearHighlights();
+        return;
+      }
+
+      this.searchRanges = findTextMatches(this.output.element, this.searchQuery);
+      this.matchCount = this.searchRanges.length;
+      if (this.matchCount === 0) {
+        this.currentMatch = 0;
+      } else if (this.currentMatch >= this.matchCount) {
+        this.currentMatch = this.matchCount - 1;
+      }
+
+      applyHighlights(this.searchRanges, this.matchCount ? this.currentMatch : -1);
+      this.scrollToCurrentMatch();
+    },
+
+    nextMatch: function () {
+      if (this.matchCount === 0) {
+        return;
+      }
+      this.currentMatch = (this.currentMatch + 1) % this.matchCount;
+      applyHighlights(this.searchRanges, this.currentMatch);
+      this.scrollToCurrentMatch();
+    },
+
+    prevMatch: function () {
+      if (this.matchCount === 0) {
+        return;
+      }
+      this.currentMatch = (this.currentMatch - 1 + this.matchCount) % this.matchCount;
+      applyHighlights(this.searchRanges, this.currentMatch);
+      this.scrollToCurrentMatch();
+    },
+
+    scrollToCurrentMatch: function () {
+      const range = this.searchRanges[this.currentMatch];
+      if (!range) {
+        return;
+      }
+      // Pause autoscroll-following while the user navigates matches.
+      this.atBottom = false;
+      const target = range.startContainer.parentElement;
+      if (target && target.scrollIntoView) {
+        target.scrollIntoView({block: 'center', inline: 'nearest'});
+      }
+    },
+
     renderOutputElement: function () {
       if (!this.output || !this.$el) {
         return
@@ -167,9 +296,15 @@ export default {
   beforeUnmount: function () {
     window.removeEventListener('resize', this.revalidateScroll);
     window.clearInterval(this.scrollUpdater);
+    clearHighlights();
   },
 
   watch: {
+    searchQuery: function () {
+      this.currentMatch = 0;
+      this.runSearch();
+    },
+
     outputFormat: {
       immediate: true,
       handler: function () {
@@ -238,6 +373,52 @@ export default {
 
 .log-panel-header :deep(.v-icon) {
   color: #768390;
+}
+
+.log-search {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.log-search-input {
+  width: 150px;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 4px;
+  color: #adbac7;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 2px 6px;
+  outline: none;
+}
+
+.log-search-input:focus {
+  border-color: var(--primary-color);
+}
+
+.log-search-count {
+  color: #768390;
+  font-size: 11px;
+  min-width: 34px;
+  text-align: right;
+}
+
+.log-search-btn {
+  cursor: pointer;
+  color: #768390;
+  border-radius: 4px;
+}
+
+.log-search-btn:hover {
+  color: #adbac7;
+  background: #30363d;
+}
+
+.log-search-btn.disabled {
+  opacity: 0.4;
+  pointer-events: none;
 }
 
 .log-panel-shadow {
@@ -320,4 +501,17 @@ export default {
 }
 
 
+</style>
+
+<!-- Global: ::highlight() applies to Ranges in the externally-inserted output
+     element, which doesn't carry the scoped-style attribute. -->
+<style>
+::highlight(log-search) {
+  background-color: rgba(255, 214, 0, 0.35);
+}
+
+::highlight(log-search-current) {
+  background-color: #f5b301;
+  color: #0d1117;
+}
 </style>
