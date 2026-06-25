@@ -36,8 +36,18 @@ class TestUserFileStorage(unittest.TestCase):
         self.storage.start_autoclean(test_utils.temp_folder, 2)
         self.assertTrue(os.path.exists(folder))
 
-        time.sleep(0.020)
+        # Autoclean runs on a background timer; wait for the deletion instead of
+        # assuming a fixed delay (a fixed sleep was flaky on loaded CI runners).
+        self._wait_until(lambda: not os.path.exists(folder))
         self.assertFalse(os.path.exists(folder))
+
+    @staticmethod
+    def _wait_until(condition, timeout_sec=2, interval_sec=0.005):
+        deadline = time.time() + timeout_sec
+        while time.time() < deadline:
+            if condition():
+                return
+            time.sleep(interval_sec)
 
     def test_allow_to_access_own_folder(self):
         user1_folder = self.storage.prepare_new_folder('user1', test_utils.temp_folder)
