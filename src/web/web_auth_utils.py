@@ -117,6 +117,13 @@ def is_allowed_during_login(request_path, login_url, request_handler):
                        '/img/titleBackground_login.jpg',
                        '/img/gitlab-icon-rgb.png']
 
+    # Vite emits the bundled JS/CSS/fonts/images (used by the login page too,
+    # often as hashed and shared chunks) under /assets/. These are static client
+    # resources with no protected data, and the app stays unusable without the
+    # authenticated API, so they must be reachable to render the login page.
+    if request_path.startswith('/assets/'):
+        return True
+
     return (request_path in login_resources) or (request_path.startswith('/theme/'))
 
 

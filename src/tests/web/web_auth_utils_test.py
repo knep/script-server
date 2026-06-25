@@ -45,7 +45,12 @@ class LoginResourcesTest(TestCase):
         ('/fonts/roboto-latin-400.60fa3c06.woff'),
         ('/fonts/roboto-latin-400.479970ff.woff2'),
         ('/fonts/roboto-latin-500.020c97dc.woff2'),
-        ('/fonts/roboto-latin-500.87284894.woff')
+        ('/fonts/roboto-latin-500.87284894.woff'),
+        # Vite-built hashed bundles served from /assets/ (used by the login page)
+        ('/assets/login-jEjOHyEw.js'),
+        ('/assets/css-Bn4Yn0er.css'),
+        ('/assets/theme-C3Leg-oT.css'),
+        ('/assets/MaterialIcons-Regular-Bnsxcfr1.woff')
     ])
     def test_is_allowed_during_login_when_allowed(self, resource):
         request_handler = mock_request_handler(method='GET')
