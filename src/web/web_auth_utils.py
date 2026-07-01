@@ -14,8 +14,6 @@ from web.web_utils import identify_user
 
 LOGGER = logging.getLogger('web_server')
 
-webpack_prefixed_extensions = ['.css', '.js.map', '.js', '.jpg', '.woff', '.woff2', '.png']
-
 
 def check_authorization_sync(func):
     wrapper = check_authorization(func)
@@ -101,21 +99,6 @@ def is_allowed_during_login(request_path, login_url, request_handler):
 
     if request_path == login_url:
         return True
-    request_path = remove_webpack_suffixes(request_path)
-
-    login_resources = ['/js/login.js',
-                       '/js/login.js.map',
-                       '/js/chunk-login-vendors.js',
-                       '/js/chunk-login-vendors.js.map',
-                       '/favicon.ico',
-                       '/css/login.css',
-                       '/css/chunk-login-vendors.css',
-                       '/fonts/roboto-latin-500.woff2',
-                       '/fonts/roboto-latin-500.woff',
-                       '/fonts/roboto-latin-400.woff2',
-                       '/fonts/roboto-latin-400.woff',
-                       '/img/titleBackground_login.jpg',
-                       '/img/gitlab-icon-rgb.png']
 
     # Vite emits the bundled JS/CSS/fonts/images (used by the login page too,
     # often as hashed and shared chunks) under /assets/. These are static client
@@ -124,25 +107,4 @@ def is_allowed_during_login(request_path, login_url, request_handler):
     if request_path.startswith('/assets/'):
         return True
 
-    return (request_path in login_resources) or (request_path.startswith('/theme/'))
-
-
-def remove_webpack_suffixes(request_path):
-    if request_path.endswith('.js.map'):
-        extension_start = len(request_path) - 7
-    else:
-        extension_start = request_path.rfind('.')
-
-    extension = request_path[extension_start:]
-
-    if extension not in webpack_prefixed_extensions:
-        return request_path
-
-    if extension_start < 0:
-        return request_path
-
-    prefix_start = request_path.rfind('.', 0, extension_start)
-    if prefix_start < 0:
-        return request_path
-
-    return request_path[:prefix_start] + extension
+    return request_path.startswith('/theme/')
