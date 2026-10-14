@@ -59,7 +59,12 @@ function checkRedirectReason() {
 }
 
 function validateURL(url) {
-    if (!url || url.startsWith('http') || url.startsWith('/')) {
+    // Only same-site paths: rejects absolute URLs and //host or /\host variants
+    // (the server enforces the same rule when redirecting after login)
+    if (!url) {
+        return url;
+    }
+    if (url.startsWith('/') && !url.startsWith('//') && !url.includes('\\')) {
         return url;
     }
     return '/';

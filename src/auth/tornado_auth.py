@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import logging
+from urllib.parse import urlsplit
 
 import tornado.concurrent
 import tornado.escape
@@ -93,11 +94,7 @@ class TornadoAuth:
 
         path = tornado.escape.url_unescape(request_handler.get_argument('next', '/'))
 
-        # redirect only to internal URLs
-        if path.startswith('http'):
-            path = '/'
-
-        redirect_relative(path, request_handler)
+        redirect_relative(sanitize_next_path(path), request_handler)
 
     def get_client_visible_config(self):
         result = {'type': self.authenticator.auth_type}
@@ -122,3 +119,17 @@ class TornadoAuth:
         request_handler.clear_cookie('username')
 
         self.authenticator.logout(username, request_handler)
+
+
+def sanitize_next_path(path):
+    # Only same-site absolute paths are allowed as a post-login redirect target.
+    # Rejects absolute URLs (any scheme case), protocol-relative URLs (//host)
+    # and backslash variants (/\host), which browsers treat as //host.
+    if not path or not path.startswith('/') or '\\' in path:
+        return '/'
+
+    parsed = urlsplit(path)
+    if parsed.scheme or parsed.netloc:
+        return '/'
+
+    return path
