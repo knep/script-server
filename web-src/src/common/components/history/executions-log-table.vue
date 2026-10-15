@@ -16,14 +16,14 @@
       <thead>
       <tr>
         <th class="id-column" :class="showSort('id')" @click="sortBy('id')">ID</th>
-        <th class="start_time-column" :class="showSort('startTimeString')" @click="sortBy('startTimeString')">Start Time</th>
+        <th class="start_time-column" :class="showSort('startTime')" @click="sortBy('startTime')">Start Time</th>
         <th class="user-column" :class="showSort('user')" @click="sortBy('user')">User</th>
         <th class="script-column" :class="showSort('script')" @click="sortBy('script')">Script</th>
-        <th class="status-column" :class="showSort('fullStatus')" @click="sortBy('fullStatus')">Status</th>
+        <th class="status-column not-sortable">Status</th>
       </tr>
       </thead>
-      <tbody v-if="!loading">
-      <tr v-for="row in filteredRows" :key="row.id" @click="rowClick(row)">
+      <tbody :class="{reloading: loading}">
+      <tr v-for="row in rows" :key="row.id" @click="rowClick(row)">
         <td>{{ row.id }}</td>
         <td>{{ row.startTimeString }}</td>
         <td>{{ row.user }}</td>
@@ -32,7 +32,8 @@
       </tr>
       </tbody>
     </table>
-    <p v-if="loading" class="loading-text">History will appear here</p>
+    <p v-if="loading && isEmpty" class="loading-text">History will appear here</p>
+    <p v-else-if="isEmpty" class="empty-text">No executions found</p>
   </div>
 </template>
 
@@ -40,6 +41,8 @@
 import ClearIcon from '@/assets/clear.png'
 import SearchIcon from '@/assets/search.png'
 import {useHistoryStore} from '@/common/stores/history'
+
+const SEARCH_DEBOUNCE_MS = 300
 
 export default {
   name: 'executions-log-table',
@@ -52,26 +55,22 @@ export default {
 
   data() {
     return {
-      searchText: '',
-      sortColumn: 'id',
-      ascending: false
+      // initialised from the store, so that the search survives the table being re-mounted
+      searchText: useHistoryStore().searchText,
+      searchTimeoutId: null
     }
   },
 
   methods: {
     showSort: function (sortKey) {
       if (this.sortColumn === sortKey) {
-        return this.ascending ? 'sorted asc' : 'sorted desc'
+        return this.order === 'asc' ? 'sorted asc' : 'sorted desc'
       }
     },
 
     sortBy: function (sortKey) {
-      if (this.sortColumn === sortKey) {
-        this.ascending = !this.ascending;
-      } else {
-        this.ascending = true;
-        this.sortColumn = sortKey;
-      }
+      const order = this.sortColumn === sortKey && this.order === 'asc' ? 'desc' : 'asc'
+      useHistoryStore().setSort(sortKey, order)
     },
 
     searchIconClickHandler() {
@@ -84,9 +83,38 @@ export default {
     },
   },
 
+  watch: {
+    searchText(newValue) {
+      if (this.searchTimeoutId !== null) {
+        clearTimeout(this.searchTimeoutId)
+      }
+
+      this.searchTimeoutId = setTimeout(() => {
+        this.searchTimeoutId = null
+        if (newValue !== useHistoryStore().searchText) {
+          useHistoryStore().setSearch(newValue)
+        }
+      }, SEARCH_DEBOUNCE_MS)
+    }
+  },
+
+  unmounted() {
+    if (this.searchTimeoutId !== null) {
+      clearTimeout(this.searchTimeoutId)
+    }
+  },
+
   computed: {
     loading() {
       return useHistoryStore().loading
+    },
+
+    sortColumn() {
+      return useHistoryStore().sortColumn
+    },
+
+    order() {
+      return useHistoryStore().order
     },
 
     isClearSearchButton() {
@@ -97,45 +125,8 @@ export default {
       return this.isClearSearchButton ? ClearIcon : SearchIcon;
     },
 
-    filteredRows() {
-      let searchText = (this.searchText || '').trim().toLowerCase();
-      let resultRows;
-      if(!this.rows) {
-        resultRows = [];
-      } else if(searchText === '') {
-        resultRows = [...this.rows];
-      } else {
-        resultRows = this.rows.filter((row) => {
-          return row.script.toLowerCase().includes(searchText) ||
-            row.user.toLowerCase().includes(searchText);
-        });
-      }
-
-      let ascending = this.ascending;
-      let column = this.sortColumn;
-
-      return resultRows.sort((a, b) => {
-        if (column === 'id') {
-          let id_a = a[column];
-          let id_b = b[column];
-          return ascending ? id_a - id_b : id_b - id_a
-
-        } else if (column === 'startTimeString') {
-          let date_a = new Date(a[column]);
-          let date_b = new Date(b[column]);
-          return ascending ? date_a - date_b : date_b - date_a
-
-        } else {
-          let other_a = a[column].toLowerCase()
-          let other_b = b[column].toLowerCase()
-          if (other_a > other_b) {
-            return ascending ? 1 : -1
-          } else if (other_a < other_b) {
-            return ascending ? -1 : 1
-          }
-          return 0;
-        }
-      });
+    isEmpty() {
+      return !this.rows || this.rows.length === 0
     }
   }
 }
@@ -144,6 +135,14 @@ export default {
 <style scoped>
 .executions-log-table th  {
   cursor: pointer;
+}
+
+.executions-log-table th.not-sortable {
+  cursor: default;
+}
+
+.executions-log-table tbody.reloading {
+  opacity: 0.5;
 }
 
 .executions-log-table tbody > tr {
@@ -170,7 +169,7 @@ export default {
   width: 15%;
 }
 
-.loading-text {
+.loading-text, .empty-text {
   color: var(--font-color-medium);
   font-size: 1.2em;
   text-align: center;

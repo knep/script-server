@@ -1,9 +1,14 @@
 # noinspection PyBroadException
+import base64
+import binascii
+import heapq
+import json
 import logging
 import os
 import re
+from datetime import datetime, timezone
 from string import Template
-from typing import Optional
+from typing import List, Optional
 
 from auth.authorization import is_same_user
 from execution.execution_service import ExecutionService
@@ -13,13 +18,31 @@ from model.server_conf import LoggingConfig
 from utils import file_utils, audit_utils
 from utils.audit_utils import get_audit_name
 from utils.collection_utils import get_first_existing
-from utils.date_utils import get_current_millis, ms_to_datetime
+from utils.date_utils import get_current_millis, ms_to_datetime, to_millis
 
 ENCODING = 'utf8'
 
 OUTPUT_STARTED_MARKER = '>>>>>  OUTPUT STARTED <<<<<'
 
+SORT_START_TIME = 'startTime'
+SORT_ID = 'id'
+SORT_USER = 'user'
+SORT_SCRIPT = 'script'
+SORTABLE_FIELDS = (SORT_START_TIME, SORT_ID, SORT_USER, SORT_SCRIPT)
+
+ORDER_ASC = 'asc'
+ORDER_DESC = 'desc'
+SORT_ORDERS = (ORDER_ASC, ORDER_DESC)
+
+MAX_PAGE_LIMIT = 500
+
+_MIN_DATETIME = datetime.min.replace(tzinfo=timezone.utc)
+
 LOGGER = logging.getLogger('script_server.execution.logging')
+
+
+class InvalidCursorException(Exception):
+    pass
 
 
 class ScriptOutputLogger:
@@ -109,6 +132,39 @@ class HistoryEntry:
         self.exit_code = None
 
 
+class HistoryEntrySummary:
+    """Everything needed to list, sort, search and access-check an execution, without its command.
+
+    One instance per known execution stays in memory for the lifetime of the process, so the
+    unbounded fields (command, output format) are left out and read from the log file on demand.
+    """
+
+    __slots__ = ('id', 'user_name', 'user_id', 'start_time', 'script_name', 'exit_code')
+
+    def __init__(self, id, user_name, user_id, start_time, script_name, exit_code):
+        self.id = id
+        self.user_name = user_name
+        self.user_id = user_id
+        self.start_time = start_time
+        self.script_name = script_name
+        self.exit_code = exit_code
+
+
+class HistoryPage:
+    def __init__(self, records, total, next_cursor):
+        self.records = records
+        self.total = total
+        self.next_cursor = next_cursor
+
+
+class _IndexedLog:
+    __slots__ = ('filename', 'summary')
+
+    def __init__(self, filename, summary):
+        self.filename = filename
+        self.summary = summary
+
+
 class ExecutionLoggingService:
     def __init__(self, output_folder, log_name_creator, authorizer):
         self._output_folder = output_folder
@@ -116,7 +172,7 @@ class ExecutionLoggingService:
         self._authorizer = authorizer
 
         self._visited_files = set()
-        self._ids_to_file_map = {}
+        self._logs_by_id = {}
         self._output_loggers = {}
 
         file_utils.prepare_folder(output_folder)
@@ -167,12 +223,18 @@ class ExecutionLoggingService:
 
         log_filename = os.path.basename(log_file_path)
         self._visited_files.add(log_filename)
-        self._ids_to_file_map[execution_id] = log_filename
+        self._logs_by_id[execution_id] = _IndexedLog(log_filename, HistoryEntrySummary(
+            id=execution_id,
+            user_name=user_name,
+            user_id=user_id,
+            start_time=ms_to_datetime(start_time_millis),
+            script_name=script_name,
+            exit_code=None))
         self._output_loggers[execution_id] = output_logger
 
     def write_post_execution_info(self, execution_id, exit_code):
-        filename = self._ids_to_file_map.get(execution_id)
-        if not filename:
+        indexed_log = self._logs_by_id.get(execution_id)
+        if not indexed_log:
             LOGGER.warning('Failed to find filename for execution ' + execution_id)
             return
 
@@ -181,50 +243,117 @@ class ExecutionLoggingService:
             LOGGER.warning('Failed to find logger for execution ' + execution_id)
             return
 
-        log_file_path = os.path.join(self._output_folder, filename)
+        log_file_path = os.path.join(self._output_folder, indexed_log.filename)
 
-        logger.set_close_callback(lambda: self._write_post_execution_info(log_file_path, exit_code))
+        def close_callback():
+            self._write_post_execution_info(log_file_path, exit_code)
+            indexed_log.summary.exit_code = int(exit_code) if exit_code is not None else None
 
-    def get_history_entries(self, user_id, *, system_call=False):
+        logger.set_close_callback(close_callback)
+
+    def get_history_entries(self, user_id, *, system_call=False) -> List[HistoryEntrySummary]:
         self._renew_files_cache()
 
-        result = []
+        return [log.summary for log in self._logs_by_id.values()
+                if self._can_access(log.summary.user_id, user_id, system_call)]
 
-        for file in self._ids_to_file_map.values():
-            history_entry = self._extract_history_entry(file)
-            if history_entry is not None and self._can_access_entry(history_entry, user_id, system_call):
-                result.append(history_entry)
+    def get_history_page(self,
+                         user_id,
+                         *,
+                         system_call=False,
+                         search=None,
+                         sort=None,
+                         order=None,
+                         limit=None,
+                         after=None) -> HistoryPage:
+        """Return a single page of history entries, newest first by default.
 
-        return result
+        search: case-insensitive substring, matched against the script name or the user name
+        sort/order: see SORTABLE_FIELDS and SORT_ORDERS
+        limit: page size, 1..MAX_PAGE_LIMIT; None returns every matching entry
+        after: cursor from a previous page's next_cursor; must have been produced for the same
+               sort and order, otherwise InvalidCursorException is raised
 
-    def find_history_entry(self, execution_id, user_id):
+        total counts everything the user may see for this search, regardless of the cursor.
+        """
+
         self._renew_files_cache()
 
-        file = self._ids_to_file_map.get(execution_id)
-        if file is None:
+        sort = sort if sort is not None else SORT_START_TIME
+        order = order if order is not None else ORDER_DESC
+
+        if sort not in SORTABLE_FIELDS:
+            raise ValueError('Unsupported sort field: ' + str(sort))
+        if order not in SORT_ORDERS:
+            raise ValueError('Unsupported sort order: ' + str(order))
+        if limit is not None and (limit < 1 or limit > MAX_PAGE_LIMIT):
+            raise ValueError('limit should be between 1 and ' + str(MAX_PAGE_LIMIT))
+
+        cursor_key = _decode_cursor(after, sort, order) if after else None
+        descending = order == ORDER_DESC
+        search_text = search.strip().lower() if search else None
+
+        total = 0
+        candidates = []
+        for indexed_log in self._logs_by_id.values():
+            summary = indexed_log.summary
+
+            if not self._can_access(summary.user_id, user_id, system_call):
+                continue
+
+            if search_text and not _matches_search(summary, search_text):
+                continue
+
+            total += 1
+
+            sort_key = _sort_key(summary, sort)
+            if cursor_key is not None and not _is_after_cursor(sort_key, cursor_key, descending):
+                continue
+
+            candidates.append((sort_key, summary))
+
+        if limit is None:
+            candidates.sort(key=_candidate_key, reverse=descending)
+            return HistoryPage([summary for _, summary in candidates], total, None)
+
+        if descending:
+            page = heapq.nlargest(limit, candidates, key=_candidate_key)
+        else:
+            page = heapq.nsmallest(limit, candidates, key=_candidate_key)
+
+        has_more = len(candidates) > limit
+        next_cursor = _encode_cursor(page[-1][1], sort, order) if (has_more and page) else None
+
+        return HistoryPage([summary for _, summary in page], total, next_cursor)
+
+    def find_history_entry(self, execution_id, user_id) -> Optional[HistoryEntry]:
+        self._renew_files_cache()
+
+        indexed_log = self._logs_by_id.get(execution_id)
+        if indexed_log is None:
             LOGGER.warning('find_history_entry: file for %s id not found', execution_id)
             return None
 
-        entry = self._extract_history_entry(file)
+        if not self._can_access(indexed_log.summary.user_id, user_id):
+            message = 'User ' + user_id + ' has no access to execution #' + str(execution_id)
+            LOGGER.warning('%s. Original user: %s', message, indexed_log.summary.user_id)
+            raise AccessProhibitedException(message)
+
+        entry = self._extract_history_entry(indexed_log.filename)
         if entry is None:
             LOGGER.warning('find_history_entry: cannot parse file for %s', execution_id)
-
-        elif not self._can_access_entry(entry, user_id):
-            message = 'User ' + user_id + ' has no access to execution #' + str(execution_id)
-            LOGGER.warning('%s. Original user: %s', message, entry.user_id)
-            raise AccessProhibitedException(message)
 
         return entry
 
     def find_log(self, execution_id):
         self._renew_files_cache()
 
-        file = self._ids_to_file_map.get(execution_id)
-        if file is None:
+        indexed_log = self._logs_by_id.get(execution_id)
+        if indexed_log is None:
             LOGGER.warning('find_log: file for %s id not found', execution_id)
             return None
 
-        file_content = file_utils.read_file(os.path.join(self._output_folder, file),
+        file_content = file_utils.read_file(os.path.join(self._output_folder, indexed_log.filename),
                                             keep_newlines=True)
         log = file_content.split(OUTPUT_STARTED_MARKER, 1)[1]
         return _lstrip_any_linesep(log)
@@ -250,17 +379,17 @@ class ExecutionLoggingService:
         return correct_format, parameters_text
 
     def _renew_files_cache(self):
-        cache = self._ids_to_file_map
+        index = self._logs_by_id
 
         obsolete_ids = []
-        for id, file in cache.items():
-            path = os.path.join(self._output_folder, file)
+        for id, indexed_log in index.items():
+            path = os.path.join(self._output_folder, indexed_log.filename)
             if not os.path.exists(path):
                 obsolete_ids.append(id)
 
         for obsolete_id in obsolete_ids:
             LOGGER.info('Logs for execution #' + obsolete_id + ' were deleted')
-            del cache[obsolete_id]
+            del index[obsolete_id]
 
         for file in os.listdir(self._output_folder):
             if not file.lower().endswith('.log'):
@@ -275,7 +404,7 @@ class ExecutionLoggingService:
             if entry is None:
                 continue
 
-            cache[entry.id] = file
+            index[entry.id] = _IndexedLog(file, _to_summary(entry))
 
     @staticmethod
     def _create_log_identifier(audit_name, script_name, start_time):
@@ -345,11 +474,8 @@ class ExecutionLoggingService:
         new_content = parameters_text + OUTPUT_STARTED_MARKER + os.linesep + file_parts[1]
         file_utils.write_file(log_file_path, new_content.encode(ENCODING), byte_content=True)
 
-    def _can_access_entry(self, entry, user_id, system_call=False):
-        if entry is None:
-            return True
-
-        if is_same_user(entry.user_id, user_id):
+    def _can_access(self, entry_user_id, user_id, system_call=False):
+        if is_same_user(entry_user_id, user_id):
             return True
 
         if system_call:
@@ -446,6 +572,108 @@ class ExecutionLoggingController:
 
         self._execution_service.add_start_listener(started)
         self._execution_service.add_finish_listener(finished)
+
+
+def _to_summary(entry: HistoryEntry) -> HistoryEntrySummary:
+    return HistoryEntrySummary(
+        id=entry.id,
+        user_name=entry.user_name,
+        user_id=entry.user_id,
+        start_time=entry.start_time,
+        script_name=entry.script_name,
+        exit_code=entry.exit_code)
+
+
+def _matches_search(summary: HistoryEntrySummary, search_text):
+    return (search_text in (summary.script_name or '').lower()
+            or search_text in (summary.user_name or '').lower())
+
+
+def _candidate_key(candidate):
+    return candidate[0]
+
+
+def _is_after_cursor(sort_key, cursor_key, descending):
+    return sort_key < cursor_key if descending else sort_key > cursor_key
+
+
+def _id_sort_key(id):
+    """Ids are generated as incrementing numbers, but the folder may contain hand-made log files."""
+    try:
+        return 1, int(id), ''
+    except (TypeError, ValueError):
+        return 0, 0, str(id)
+
+
+def _text_sort_key(value):
+    return (1, value.lower()) if value is not None else (0, '')
+
+
+def _datetime_sort_key(value):
+    return (1, value) if value is not None else (0, _MIN_DATETIME)
+
+
+def _sort_key(summary: HistoryEntrySummary, sort):
+    id_key = _id_sort_key(summary.id)
+
+    if sort == SORT_ID:
+        primary = id_key
+    elif sort == SORT_USER:
+        primary = _text_sort_key(summary.user_name)
+    elif sort == SORT_SCRIPT:
+        primary = _text_sort_key(summary.script_name)
+    else:
+        primary = _datetime_sort_key(summary.start_time)
+
+    return primary, id_key
+
+
+def _cursor_value(summary: HistoryEntrySummary, sort):
+    if sort == SORT_ID:
+        return summary.id
+    if sort == SORT_USER:
+        return summary.user_name
+    if sort == SORT_SCRIPT:
+        return summary.script_name
+    return to_millis(summary.start_time) if summary.start_time is not None else None
+
+
+def _encode_cursor(summary: HistoryEntrySummary, sort, order):
+    payload = json.dumps({'s': sort, 'o': order, 'i': summary.id, 'v': _cursor_value(summary, sort)})
+    return base64.urlsafe_b64encode(payload.encode(ENCODING)).decode('ascii').rstrip('=')
+
+
+def _decode_cursor(cursor, sort, order):
+    try:
+        padded = cursor + '=' * (-len(cursor) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(padded.encode('ascii')).decode(ENCODING))
+    except (ValueError, binascii.Error, UnicodeDecodeError):
+        raise InvalidCursorException('Malformed cursor')
+
+    if not isinstance(payload, dict):
+        raise InvalidCursorException('Malformed cursor')
+
+    if payload.get('s') != sort or payload.get('o') != order:
+        raise InvalidCursorException('Cursor was created for a different sorting')
+
+    id = payload.get('i')
+    if id is None:
+        raise InvalidCursorException('Malformed cursor')
+
+    value = payload.get('v')
+    id_key = _id_sort_key(id)
+
+    try:
+        if sort == SORT_ID:
+            primary = id_key
+        elif sort in (SORT_USER, SORT_SCRIPT):
+            primary = _text_sort_key(value)
+        else:
+            primary = _datetime_sort_key(ms_to_datetime(value) if value is not None else None)
+    except (AttributeError, TypeError, ValueError, OverflowError, OSError):
+        raise InvalidCursorException('Malformed cursor')
+
+    return primary, id_key
 
 
 def _rstrip_once(text, char):

@@ -1,3 +1,4 @@
+import base64
 import functools
 import inspect
 import os
@@ -14,7 +15,8 @@ from auth.user import User
 from execution import executor
 from execution.execution_service import ExecutionService
 from execution.logging import ScriptOutputLogger, ExecutionLoggingService, OUTPUT_STARTED_MARKER, \
-    LogNameCreator, ExecutionLoggingController
+    LogNameCreator, ExecutionLoggingController, InvalidCursorException, MAX_PAGE_LIMIT, \
+    ORDER_ASC, ORDER_DESC, SORT_ID, SORT_SCRIPT, SORT_START_TIME, SORT_USER
 from model.model_helper import AccessProhibitedException
 from model.script_config import OUTPUT_FORMAT_TERMINAL
 from model.server_conf import LoggingConfig
@@ -26,6 +28,12 @@ from utils import file_utils, audit_utils
 from utils.date_utils import get_current_millis, ms_to_datetime, to_millis
 
 USER_X = User('userX', [])
+
+_START_MILLIS = 1500000000000
+
+
+def _ids(page):
+    return [record.id for record in page.records]
 
 
 def default_values_decorator(func):
@@ -185,14 +193,11 @@ class TestLoggingService(unittest.TestCase):
         entries = self.logging_service.get_history_entries('user1')
         self.assertEqual(1, len(entries))
 
-        entry = entries[0]
-        self.validate_history_entry(entry,
-                                    id='id1',
-                                    user_name='user1',
-                                    script_name='My script',
-                                    start_time=start_time,
-                                    command='./script.sh -p p1 --flag',
-                                    output_format='html')
+        self.validate_history_summary(entries[0],
+                                      id='id1',
+                                      user_name='user1',
+                                      script_name='My script',
+                                      start_time=start_time)
 
     def test_no_history_for_wrong_file(self):
         log_path = os.path.join(test_utils.temp_folder, 'wrong.log')
@@ -203,10 +208,8 @@ class TestLoggingService(unittest.TestCase):
 
     def test_multiline_command_in_history(self):
         self.simulate_logging(execution_id='id1', command='./script.sh -p a\nb -p2 "\n\n\n"')
-        entries = self.logging_service.get_history_entries('userX')
-        self.assertEqual(1, len(entries))
 
-        entry = entries[0]
+        entry = self.logging_service.find_history_entry('id1', 'userX')
         self.validate_history_entry(entry, id='id1', command='./script.sh -p a\nb -p2 "\n\n\n"')
 
     def test_get_log_by_id(self):
@@ -224,14 +227,14 @@ class TestLoggingService(unittest.TestCase):
     def test_exit_code_in_history(self):
         self.simulate_logging(execution_id='1', log_lines=['text'], exit_code=13)
 
-        entry = self.logging_service.get_history_entries('userX')[0]
-        self.validate_history_entry(entry, id='1', exit_code=13)
+        summary = self.logging_service.get_history_entries('userX')[0]
+        self.validate_history_summary(summary, id='1', exit_code=13)
 
     def test_exit_code_when_no_post_execution_call(self):
         self.simulate_logging(execution_id='1', log_lines=['text'], exit_code=13, write_post_execution_info=False)
 
-        entry = self.logging_service.get_history_entries('userX')[0]
-        self.validate_history_entry(entry, id='1', exit_code=None)
+        summary = self.logging_service.get_history_entries('userX')[0]
+        self.validate_history_summary(summary, id='1', exit_code=None)
 
     def test_write_post_execution_info_before_log_closed(self):
         output_stream = Observable()
@@ -257,8 +260,8 @@ class TestLoggingService(unittest.TestCase):
         self.simulate_logging(execution_id='id1')
 
         new_service = ExecutionLoggingService(test_utils.temp_folder, LogNameCreator(), self.authorizer)
-        entry = new_service.get_history_entries('userX')[0]
-        self.validate_history_entry(entry, id='id1')
+        summary = new_service.get_history_entries('userX')[0]
+        self.validate_history_summary(summary, id='id1')
 
     def test_get_history_entries_after_delete(self):
         self.simulate_logging(execution_id='id1')
@@ -282,8 +285,8 @@ class TestLoggingService(unittest.TestCase):
         entries = self._get_entries_sorted(user_id)
         self.assertEqual(2, len(entries))
 
-        self.validate_history_entry(entry=entries[0], id='id1', user_id='userA')
-        self.validate_history_entry(entry=entries[1], id='id4', user_id='userA')
+        self.validate_history_summary(summary=entries[0], id='id1', user_id='userA')
+        self.validate_history_summary(summary=entries[1], id='id4', user_id='userA')
 
     def test_get_history_entries_for_power_user(self):
         self.simulate_logging(execution_id='id1', user_id='userA')
@@ -294,10 +297,10 @@ class TestLoggingService(unittest.TestCase):
         entries = self._get_entries_sorted('power_user')
         self.assertEqual(4, len(entries))
 
-        self.validate_history_entry(entry=entries[0], id='id1', user_id='userA')
-        self.validate_history_entry(entry=entries[1], id='id2', user_id='userB')
-        self.validate_history_entry(entry=entries[2], id='id3', user_id='userC')
-        self.validate_history_entry(entry=entries[3], id='id4', user_id='userA')
+        self.validate_history_summary(summary=entries[0], id='id1', user_id='userA')
+        self.validate_history_summary(summary=entries[1], id='id2', user_id='userB')
+        self.validate_history_summary(summary=entries[2], id='id3', user_id='userC')
+        self.validate_history_summary(summary=entries[3], id='id4', user_id='userA')
 
     def test_get_history_entries_for_system_call(self):
         self.simulate_logging(execution_id='id1', user_id='userA')
@@ -308,10 +311,10 @@ class TestLoggingService(unittest.TestCase):
         entries = self._get_entries_sorted('some user', system_call=True)
         self.assertEqual(4, len(entries))
 
-        self.validate_history_entry(entry=entries[0], id='id1', user_id='userA')
-        self.validate_history_entry(entry=entries[1], id='id2', user_id='userB')
-        self.validate_history_entry(entry=entries[2], id='id3', user_id='userC')
-        self.validate_history_entry(entry=entries[3], id='id4', user_id='userA')
+        self.validate_history_summary(summary=entries[0], id='id1', user_id='userA')
+        self.validate_history_summary(summary=entries[1], id='id2', user_id='userB')
+        self.validate_history_summary(summary=entries[2], id='id3', user_id='userC')
+        self.validate_history_summary(summary=entries[3], id='id4', user_id='userA')
 
     def test_find_history_entry_after_delete(self):
         self.simulate_logging(execution_id='id1')
@@ -388,6 +391,229 @@ class TestLoggingService(unittest.TestCase):
         log = self.logging_service.find_log('id1')
         self.assertEqual('hello\r\nwonderful\r\nworld\r\n', log)
 
+    def test_get_history_entries_when_execution_is_still_running(self):
+        output_stream = Observable()
+        self.start_logging(output_stream, execution_id='id1')
+
+        entries = self.logging_service.get_history_entries('userX')
+
+        self.assertEqual(['id1'], [entry.id for entry in entries])
+
+        output_stream.close()
+
+    def test_get_history_page_when_no_limit(self):
+        self._simulate_executions(3)
+
+        page = self.logging_service.get_history_page('userX')
+
+        self.assertEqual(['id3', 'id2', 'id1'], _ids(page))
+        self.assertEqual(3, page.total)
+        self.assertIsNone(page.next_cursor)
+
+    def test_get_history_page_when_limit_smaller_than_total(self):
+        self._simulate_executions(3)
+
+        page = self.logging_service.get_history_page('userX', limit=2)
+
+        self.assertEqual(['id3', 'id2'], _ids(page))
+        self.assertEqual(3, page.total)
+        self.assertIsNotNone(page.next_cursor)
+
+    def test_get_history_page_when_limit_covers_everything(self):
+        self._simulate_executions(2)
+
+        page = self.logging_service.get_history_page('userX', limit=5)
+
+        self.assertEqual(['id2', 'id1'], _ids(page))
+        self.assertIsNone(page.next_cursor)
+
+    def test_get_history_page_when_cursor_traversal(self):
+        self._simulate_executions(7)
+
+        visited = self._traverse_pages(limit=2)
+
+        self.assertEqual(['id7', 'id6', 'id5', 'id4', 'id3', 'id2', 'id1'], visited)
+
+    def test_get_history_page_when_execution_added_between_pages(self):
+        self._simulate_executions(4)
+
+        first_page = self.logging_service.get_history_page('userX', limit=2)
+        self.assertEqual(['id4', 'id3'], _ids(first_page))
+
+        self.simulate_logging(execution_id='id5', start_time_millis=_START_MILLIS + 5000)
+
+        second_page = self.logging_service.get_history_page('userX', limit=2, after=first_page.next_cursor)
+
+        self.assertEqual(['id2', 'id1'], _ids(second_page))
+
+    def test_get_history_page_when_total_and_cursor(self):
+        self._simulate_executions(5)
+
+        first_page = self.logging_service.get_history_page('userX', limit=2)
+        second_page = self.logging_service.get_history_page('userX', limit=2, after=first_page.next_cursor)
+
+        self.assertEqual(5, first_page.total)
+        self.assertEqual(5, second_page.total)
+
+    def test_get_history_page_when_entry_without_start_time(self):
+        self.simulate_logging(execution_id='id1', start_time_millis=_START_MILLIS)
+        self._write_log_without_start_time('id2')
+
+        page = self.logging_service.get_history_page('userX')
+
+        self.assertEqual(['id1', 'id2'], _ids(page))
+
+    @parameterized.expand([
+        ('script name', 'BACK'),
+        ('user name', 'ALI'),
+    ])
+    def test_get_history_page_when_search(self, _, search):
+        self.simulate_logging(execution_id='id1', user_name='alice', script_name='backup')
+        self.simulate_logging(execution_id='id2', user_name='bob', script_name='deploy')
+
+        page = self.logging_service.get_history_page('power_user', search=search)
+
+        self.assertEqual(['id1'], _ids(page))
+        self.assertEqual(1, page.total)
+
+    def test_get_history_page_when_search_matches_nothing(self):
+        self._simulate_executions(3)
+
+        page = self.logging_service.get_history_page('userX', search='no such script')
+
+        self.assertEqual([], _ids(page))
+        self.assertEqual(0, page.total)
+        self.assertIsNone(page.next_cursor)
+
+    @parameterized.expand([
+        (SORT_ID, ORDER_ASC, ['id1', 'id2', 'id3']),
+        (SORT_ID, ORDER_DESC, ['id3', 'id2', 'id1']),
+        (SORT_SCRIPT, ORDER_ASC, ['id2', 'id3', 'id1']),
+        (SORT_SCRIPT, ORDER_DESC, ['id1', 'id3', 'id2']),
+        (SORT_START_TIME, ORDER_ASC, ['id1', 'id2', 'id3']),
+        (SORT_START_TIME, ORDER_DESC, ['id3', 'id2', 'id1']),
+    ])
+    def test_get_history_page_when_sorted(self, sort, order, expected_ids):
+        self.simulate_logging(execution_id='id1', script_name='ccc', start_time_millis=_START_MILLIS + 1000)
+        self.simulate_logging(execution_id='id2', script_name='aaa', start_time_millis=_START_MILLIS + 2000)
+        self.simulate_logging(execution_id='id3', script_name='bbb', start_time_millis=_START_MILLIS + 3000)
+
+        page = self.logging_service.get_history_page('userX', sort=sort, order=order)
+
+        self.assertEqual(expected_ids, _ids(page))
+
+    @parameterized.expand([
+        (ORDER_ASC, ['id2', 'id3', 'id1']),
+        (ORDER_DESC, ['id1', 'id3', 'id2']),
+    ])
+    def test_get_history_page_when_sorted_by_user(self, order, expected_ids):
+        self.simulate_logging(execution_id='id1', user_name='carol')
+        self.simulate_logging(execution_id='id2', user_name='alice')
+        self.simulate_logging(execution_id='id3', user_name='bob')
+
+        page = self.logging_service.get_history_page('power_user', sort=SORT_USER, order=order)
+
+        self.assertEqual(expected_ids, _ids(page))
+
+    def test_get_history_page_when_sorted_and_cursor_traversal(self):
+        self.simulate_logging(execution_id='id1', script_name='ccc')
+        self.simulate_logging(execution_id='id2', script_name='aaa')
+        self.simulate_logging(execution_id='id3', script_name='bbb')
+
+        visited = self._traverse_pages(limit=1, sort=SORT_SCRIPT, order=ORDER_ASC)
+
+        self.assertEqual(['id2', 'id3', 'id1'], visited)
+
+    def test_get_history_page_when_another_user(self):
+        self.simulate_logging(execution_id='id1', user_id='userA')
+        self.simulate_logging(execution_id='id2', user_id='userB')
+
+        page = self.logging_service.get_history_page('userA')
+
+        self.assertEqual(['id1'], _ids(page))
+        self.assertEqual(1, page.total)
+
+    def test_get_history_page_when_cursor_from_different_sorting(self):
+        self._simulate_executions(3)
+
+        cursor = self.logging_service.get_history_page('userX', limit=1).next_cursor
+
+        with self.assertRaises(InvalidCursorException):
+            self.logging_service.get_history_page('userX', limit=1, after=cursor, sort=SORT_ID)
+
+    @parameterized.expand([
+        ('not a cursor at all!',),
+        ('YWJjZA',),
+        (base64.urlsafe_b64encode(b'{"s": "startTime", "o": "desc", "i": "id1", "v": "oops"}').decode('ascii'),),
+    ])
+    def test_get_history_page_when_malformed_cursor(self, cursor):
+        self._simulate_executions(3)
+
+        with self.assertRaises(InvalidCursorException):
+            self.logging_service.get_history_page('userX', limit=1, after=cursor)
+
+    @parameterized.expand([
+        ({'sort': 'unknown_field'},),
+        ({'order': 'sideways'},),
+        ({'limit': 0},),
+        ({'limit': -1},),
+        ({'limit': MAX_PAGE_LIMIT + 1},),
+    ])
+    def test_get_history_page_when_invalid_argument(self, arguments):
+        with self.assertRaises(ValueError):
+            self.logging_service.get_history_page('userX', **arguments)
+
+    def _simulate_executions(self, count):
+        for index in range(1, count + 1):
+            self.simulate_logging(execution_id='id' + str(index),
+                                  start_time_millis=_START_MILLIS + index * 1000)
+
+    def _traverse_pages(self, *, limit, user_id='userX', **kwargs):
+        visited = []
+        cursor = None
+
+        for _ in range(limit + len(self.get_log_files()) + 1):
+            page = self.logging_service.get_history_page(user_id, limit=limit, after=cursor, **kwargs)
+            visited.extend(_ids(page))
+
+            cursor = page.next_cursor
+            if cursor is None:
+                return visited
+
+        self.fail('Cursor traversal did not finish')
+
+    def _write_log_without_start_time(self, execution_id):
+        log_path = os.path.join(test_utils.temp_folder, execution_id + '_no_start_time.log')
+        file_utils.write_file(log_path, '\n'.join([
+            'id:' + execution_id,
+            'user_name:userX',
+            'user_id:userX',
+            'script:my_script',
+            'command:cmd',
+            'output_format:' + OUTPUT_FORMAT_TERMINAL,
+            OUTPUT_STARTED_MARKER,
+            '']))
+
+    def validate_history_summary(self, summary, *,
+                                 id,
+                                 user_name='userX',
+                                 user_id=None,
+                                 script_name='my_script',
+                                 start_time='IGNORE',
+                                 exit_code: Optional[int] = 0):
+
+        if user_id is None:
+            user_id = user_name
+
+        self.assertEqual(id, summary.id)
+        self.assertEqual(user_name, summary.user_name)
+        self.assertEqual(user_id, summary.user_id)
+        self.assertEqual(script_name, summary.script_name)
+        if start_time != 'IGNORE':
+            self.assertEqual(ms_to_datetime(start_time), summary.start_time)
+
+        self.assertEqual(exit_code, summary.exit_code)
+
     def validate_history_entry(self, entry, *,
                                id,
                                user_name='userX',
@@ -398,19 +624,16 @@ class TestLoggingService(unittest.TestCase):
                                output_format=OUTPUT_FORMAT_TERMINAL,
                                exit_code: Optional[int] = 0):
 
-        if user_id is None:
-            user_id = user_name
+        self.validate_history_summary(entry,
+                                      id=id,
+                                      user_name=user_name,
+                                      user_id=user_id,
+                                      script_name=script_name,
+                                      start_time=start_time,
+                                      exit_code=exit_code)
 
-        self.assertEqual(id, entry.id)
-        self.assertEqual(user_name, entry.user_name)
-        self.assertEqual(user_id, entry.user_id)
-        self.assertEqual(script_name, entry.script_name)
         self.assertEqual(command, entry.command)
         self.assertEqual(output_format, entry.output_format)
-        if start_time != 'IGNORE':
-            self.assertEqual(ms_to_datetime(start_time), entry.start_time)
-
-        self.assertEqual(exit_code, entry.exit_code)
 
     def read_logs_only(self, log_file):
         content = file_utils.read_file(log_file, keep_newlines=True)

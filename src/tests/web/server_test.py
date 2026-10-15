@@ -14,6 +14,7 @@ from tornado.web import create_signed_value
 
 from auth.authorization import Authorizer, ANY_USER, EmptyGroupProvider
 from config.config_service import ConfigService
+from execution.logging import HistoryEntrySummary, HistoryPage, InvalidCursorException
 from features.file_download_feature import FileDownloadFeature
 from features.file_upload_feature import FileUploadFeature
 from files.user_file_storage import UserFileStorage
@@ -21,6 +22,7 @@ from model.server_conf import ServerConfig, XSRF_PROTECTION_TOKEN, XSRF_PROTECTI
 from tests import test_utils
 from tests.test_utils import MockAuthenticator
 from utils import os_utils, env_utils, file_utils
+from utils.date_utils import ms_to_datetime
 from web import server
 
 
@@ -332,6 +334,76 @@ class ServerTest(TestCase):
         response = requests.get('http://127.0.0.1:12345/scripts', auth=HTTPBasicAuth('normal_user', 'wrong_pass'))
         self.assertEqual(401, response.status_code)
 
+    def test_history_short_log(self):
+        execution_service = MagicMock()
+        execution_service.is_running.side_effect = lambda execution_id, user: execution_id == 'id2'
+        self.start_server(12345, '127.0.0.1',
+                          execution_service=execution_service,
+                          execution_logging_service=self._logging_service_returning(
+                              ['id3', 'id2', 'id1'], total=7, next_cursor='cursor1'))
+
+        response = self.request('GET', 'http://127.0.0.1:12345/history/execution_log/short?limit=3')
+
+        self.assertEqual(['id3', 'id2', 'id1'], [record['id'] for record in response['records']])
+        self.assertEqual(['finished', 'running', 'finished'],
+                         [record['status'] for record in response['records']])
+        self.assertEqual(7, response['total'])
+        self.assertEqual('cursor1', response['nextCursor'])
+
+    def test_history_short_log_when_arguments_specified(self):
+        logging_service = self._logging_service_returning([])
+        self.start_server(12345, '127.0.0.1', execution_logging_service=logging_service)
+
+        self.request('GET', 'http://127.0.0.1:12345/history/execution_log/short'
+                            '?limit=10&after=some_cursor&search=backup&sort=user&order=asc')
+
+        logging_service.get_history_page.assert_called_once_with(
+            'normal_user', search='backup', sort='user', order='asc', limit=10, after='some_cursor')
+
+    def test_history_short_log_when_no_arguments(self):
+        logging_service = self._logging_service_returning([])
+        self.start_server(12345, '127.0.0.1', execution_logging_service=logging_service)
+
+        self.request('GET', 'http://127.0.0.1:12345/history/execution_log/short')
+
+        logging_service.get_history_page.assert_called_once_with(
+            'normal_user', search=None, sort=None, order=None, limit=None, after=None)
+
+    def test_history_short_log_when_limit_not_a_number(self):
+        self.start_server(12345, '127.0.0.1', execution_logging_service=self._logging_service_returning([]))
+
+        response = self._user_session.get('http://127.0.0.1:12345/history/execution_log/short?limit=abc')
+
+        self.assertEqual(400, response.status_code)
+
+    @parameterized.expand([
+        (ValueError('Unsupported sort field: unknown_field'),),
+        (InvalidCursorException('Malformed cursor'),),
+    ])
+    def test_history_short_log_when_service_rejects_arguments(self, error):
+        logging_service = MagicMock()
+        logging_service.get_history_page.side_effect = error
+        self.start_server(12345, '127.0.0.1', execution_logging_service=logging_service)
+
+        response = self._user_session.get('http://127.0.0.1:12345/history/execution_log/short?limit=10')
+
+        self.assertEqual(400, response.status_code)
+
+    @staticmethod
+    def _logging_service_returning(ids, *, total=None, next_cursor=None):
+        records = [HistoryEntrySummary(id=id,
+                                       user_name='normal_user',
+                                       user_id='normal_user',
+                                       start_time=ms_to_datetime(1500000000000),
+                                       script_name='my_script',
+                                       exit_code=0)
+                   for id in ids]
+
+        logging_service = MagicMock()
+        logging_service.get_history_page.return_value = HistoryPage(
+            records, total if total is not None else len(records), next_cursor)
+        return logging_service
+
     @staticmethod
     def get_xsrf_token(session):
         response = session.get('http://127.0.0.1:12345/admin/scripts')
@@ -349,7 +421,11 @@ class ServerTest(TestCase):
         response = self._user_session.get('http://127.0.0.1:12345/conf')
         self.assertEqual(response.status_code, 200)
 
-    def start_server(self, port, address, *, xsrf_protection=XSRF_PROTECTION_TOKEN, cookie_secure=False):
+    def start_server(self, port, address, *,
+                     xsrf_protection=XSRF_PROTECTION_TOKEN,
+                     cookie_secure=False,
+                     execution_service=None,
+                     execution_logging_service=None):
         file_download_feature = FileDownloadFeature(UserFileStorage(b'some_secret'), test_utils.temp_folder)
         config = ServerConfig()
         config.port = port
@@ -359,8 +435,12 @@ class ServerTest(TestCase):
         config.max_request_size_mb = 1
 
         authorizer = Authorizer(ANY_USER, ['admin_user'], [], ['admin_user'], EmptyGroupProvider())
-        execution_service = MagicMock()
-        execution_service.start_script.return_value = 3
+        if execution_service is None:
+            execution_service = MagicMock()
+            execution_service.start_script.return_value = 3
+
+        if execution_logging_service is None:
+            execution_logging_service = MagicMock()
 
         cookie_secret = b'cookie_secret'
 
@@ -372,7 +452,7 @@ class ServerTest(TestCase):
                     authorizer,
                     execution_service,
                     MagicMock(),
-                    MagicMock(),
+                    execution_logging_service,
                     ConfigService(authorizer, self.conf_folder, True, test_utils.process_invoker),
                     MagicMock(),
                     FileUploadFeature(UserFileStorage(cookie_secret), test_utils.temp_folder),

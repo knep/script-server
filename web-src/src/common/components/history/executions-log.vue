@@ -1,13 +1,17 @@
 <template>
   <div class="container">
-    <PageProgress v-if="loading && !disableProgressIndicator"/>
-    <executions-log-table v-else :rowClick="goToLog" :rows="executionRows"/>
+    <PageProgress v-if="initialLoading && !disableProgressIndicator"/>
+    <template v-else>
+      <executions-log-table :rowClick="goToLog" :rows="executionRows"/>
+      <executions-paginator/>
+    </template>
   </div>
 </template>
 
 <script>
 import PageProgress from '../PageProgress';
 import ExecutionsLogTable from './executions-log-table'
+import ExecutionsPaginator from './executions-paginator'
 import {useHistoryStore} from '@/common/stores/history'
 
 export default {
@@ -21,11 +25,22 @@ export default {
   },
   components: {
     'executions-log-table': ExecutionsLogTable,
+    'executions-paginator': ExecutionsPaginator,
     PageProgress
   },
 
+  data() {
+    return {
+      // the full-page progress is shown only for the first load, so that paging, sorting and
+      // searching do not re-mount the table (and lose the search field focus)
+      initialLoadDone: false
+    }
+  },
+
   mounted() {
-    useHistoryStore().init()
+    useHistoryStore().init().finally(() => {
+      this.initialLoadDone = true
+    })
   },
 
   methods: {
@@ -38,8 +53,8 @@ export default {
     executionRows() {
       return useHistoryStore().executions
     },
-    loading() {
-      return useHistoryStore().loading
+    initialLoading() {
+      return !this.initialLoadDone && useHistoryStore().loading
     }
   }
 }

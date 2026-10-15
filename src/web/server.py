@@ -25,7 +25,7 @@ from config.config_service import ConfigService, ConfigNotAllowedException, Inva
     CorruptConfigFileException
 from config.exceptions import InvalidConfigException
 from execution.execution_service import ExecutionService
-from execution.logging import ExecutionLoggingService
+from execution.logging import ExecutionLoggingService, InvalidCursorException
 from features.file_download_feature import FileDownloadFeature
 from features.file_upload_feature import FileUploadFeature
 from model import external_model
@@ -718,18 +718,40 @@ class ReceiveAlertHandler(BaseRequestHandler):
             file_utils.write_file(file_path, value)
 
 
+def _parse_limit(limit_arg):
+    if limit_arg is None:
+        return None
+
+    try:
+        return int(limit_arg)
+    except ValueError:
+        raise ValueError('limit should be an integer')
+
+
 class GetShortHistoryEntriesHandler(BaseRequestHandler):
     @check_authorization
     @inject_user
     def get(self, user):
-        history_entries = self.application.execution_logging_service.get_history_entries(user.user_id)
-        running_script_ids = []
-        for entry in history_entries:
-            if self.application.execution_service.is_running(entry.id, user):
-                running_script_ids.append(entry.id)
+        try:
+            page = self.application.execution_logging_service.get_history_page(
+                user.user_id,
+                search=self.get_argument('search', None),
+                sort=self.get_argument('sort', None),
+                order=self.get_argument('order', None),
+                limit=_parse_limit(self.get_argument('limit', None)),
+                after=self.get_argument('after', None))
+        except (ValueError, InvalidCursorException) as e:
+            respond_error(self, 400, str(e))
+            return
 
-        short_logs = to_short_execution_log(history_entries, running_script_ids)
-        self.write(json.dumps(short_logs))
+        running_script_ids = [entry.id for entry in page.records
+                              if self.application.execution_service.is_running(entry.id, user)]
+
+        self.write(json.dumps({
+            'records': to_short_execution_log(page.records, running_script_ids),
+            'total': page.total,
+            'nextCursor': page.next_cursor
+        }))
 
 
 class GetLongHistoryEntryHandler(BaseRequestHandler):

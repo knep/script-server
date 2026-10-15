@@ -19,7 +19,7 @@ describe('Test AppHistoryPanel', function () {
     beforeEach(async function () {
         // Mock all history API calls so component mounts don't trigger real network requests
         axiosMock = new MockAdapter(axiosInstance);
-        axiosMock.onGet(/history\/execution_log/).reply(200, []);
+        axiosMock.onGet(/history\/execution_log/).reply(200, {records: [], total: 0, nextCursor: null});
 
         pinia = createPinia();
         setActivePinia(pinia);

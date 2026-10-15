@@ -1,6 +1,11 @@
 import {defineStore} from 'pinia'
-import {isEmptyString, isNull, logError} from '@/common/utils/common'
+import {isBlankString, isEmptyString, isNull, logError} from '@/common/utils/common'
 import {axiosInstance} from '@/common/utils/axios_utils'
+
+export const DEFAULT_PAGE_SIZE = 25
+export const PAGE_SIZE_OPTIONS = [10, 25, 50, 100, 250, 500]
+export const DEFAULT_SORT_COLUMN = 'startTime'
+export const DEFAULT_ORDER = 'desc'
 
 export const useHistoryStore = defineStore('history', {
     state: () => ({
@@ -8,19 +13,107 @@ export const useHistoryStore = defineStore('history', {
         selectedExecution: null,
         selectedExecutionId: null,
         loading: false,
-        detailsLoading: false
+        detailsLoading: false,
+        pageSize: DEFAULT_PAGE_SIZE,
+        total: 0,
+        searchText: '',
+        sortColumn: DEFAULT_SORT_COLUMN,
+        order: DEFAULT_ORDER,
+        // cursors of the pages visited before the current one; its length is also the current page index
+        cursorStack: [],
+        currentCursor: null,
+        nextCursor: null,
+        // incremented per request, so that a late response of an outdated request is dropped
+        requestToken: 0
     }),
+    getters: {
+        hasNext: (state) => !isNull(state.nextCursor),
+        hasPrev: (state) => state.cursorStack.length > 0
+    },
     actions: {
         init() {
-            this.loading = true
             this.selectedExecution = null
             this.selectedExecutionId = null
 
-            axiosInstance.get('history/execution_log/short').then(({data}) => {
-                sortExecutionLogs(data)
-                this.executions = data.map(log => translateExecutionLog(log))
-                this.loading = false
-            })
+            return this.loadFirstPage()
+        },
+
+        loadFirstPage() {
+            return this.loadPage(null, [])
+        },
+
+        nextPage() {
+            if (!this.hasNext) {
+                return Promise.resolve()
+            }
+
+            return this.loadPage(this.nextCursor, [...this.cursorStack, this.currentCursor])
+        },
+
+        prevPage() {
+            if (!this.hasPrev) {
+                return Promise.resolve()
+            }
+
+            const cursorStack = [...this.cursorStack]
+            const cursor = cursorStack.pop()
+
+            return this.loadPage(cursor, cursorStack)
+        },
+
+        setPageSize(pageSize) {
+            this.pageSize = pageSize
+
+            return this.loadFirstPage()
+        },
+
+        setSearch(searchText) {
+            this.searchText = isNull(searchText) ? '' : searchText
+
+            return this.loadFirstPage()
+        },
+
+        setSort(column, order) {
+            this.sortColumn = column
+            this.order = order
+
+            return this.loadFirstPage()
+        },
+
+        loadPage(cursor, cursorStack) {
+            const requestToken = ++this.requestToken
+            this.loading = true
+
+            const params = {
+                limit: this.pageSize,
+                sort: this.sortColumn,
+                order: this.order
+            }
+            if (!isBlankString(this.searchText)) {
+                params.search = this.searchText.trim()
+            }
+            if (!isEmptyString(cursor)) {
+                params.after = cursor
+            }
+
+            return axiosInstance.get('history/execution_log/short', {params})
+                .then(({data}) => {
+                    if (requestToken !== this.requestToken) return
+
+                    const records = isNull(data) || isNull(data.records) ? [] : data.records
+                    this.executions = records.map(log => translateExecutionLog(log))
+                    this.total = isNull(data) || isNull(data.total) ? 0 : data.total
+                    this.nextCursor = isNull(data) || isNull(data.nextCursor) ? null : data.nextCursor
+                    this.currentCursor = isNull(cursor) ? null : cursor
+                    this.cursorStack = cursorStack
+                    this.loading = false
+                })
+                .catch(error => {
+                    if (requestToken === this.requestToken) {
+                        this.loading = false
+                    }
+                    logError(error)
+                })
         },
 
         selectExecution(executionId) {
@@ -49,18 +142,6 @@ export const useHistoryStore = defineStore('history', {
         }
     }
 })
-
-function sortExecutionLogs(logs) {
-    logs.sort(function (v1, v2) {
-        if (isNull(v1.startTime)) {
-            return isNull(v2.startTime) ? v1.user.localeCompare(v2.user) : 1
-        } else if (isNull(v2.startTime)) {
-            return -1
-        }
-        const dateCompare = Date.parse(v2.startTime) - Date.parse(v1.startTime)
-        return dateCompare !== 0 ? dateCompare : v1.user.localeCompare(v2.user)
-    })
-}
 
 export function translateExecutionLog(log) {
     log.startTimeString = getStartTimeString(log)
