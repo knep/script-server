@@ -358,6 +358,23 @@ class TestSecurityConfig(unittest.TestCase):
             'xsrf_protection': 'something'
         }})
 
+    @parameterized.expand([
+        (None, False, False),
+        (None, True, True),
+        (True, False, True),
+        (False, True, False),
+    ])
+    def test_cookie_secure(self, cookie_secure, ssl_enabled, expected_cookie_secure):
+        body = {}
+        if cookie_secure is not None:
+            body['security'] = {'cookie_secure': cookie_secure}
+        if ssl_enabled:
+            body['ssl'] = {'key_path': 'some_key', 'cert_path': 'some_cert'}
+
+        config = _from_json(body)
+
+        self.assertEqual(expected_cookie_secure, config.cookie_secure)
+
     def setUp(self) -> None:
         super().setUp()
         test_utils.setup()
@@ -436,6 +453,68 @@ class TestEnvVariables(unittest.TestCase):
                 'to': 'some_address',
                 'from': 'some_address',
                 'server': 'some_server'}
+
+
+class TestUserHeaderSecret(unittest.TestCase):
+    def setUp(self) -> None:
+        test_utils.setup()
+
+    def tearDown(self) -> None:
+        test_utils.cleanup()
+
+    def test_missing_when_no_access_section(self):
+        config = _from_json({})
+        self.assertIsNone(config.user_header_secret)
+
+    def test_missing_when_access_exists_without_secret(self):
+        config = _from_json({'access': {'user_header_name': 'X-Forwarded-User'}})
+        self.assertIsNone(config.user_header_secret)
+
+    def test_secret_value(self):
+        config = _from_json({'access': {
+            'user_header_name': 'X-Forwarded-User',
+            'user_header_secret': 'abcdefgh12345678'}})
+        self.assertEqual('abcdefgh12345678', config.user_header_secret)
+
+    def test_secret_from_env_variable(self):
+        test_utils.set_os_environ_value('HEADER_SECRET', 'env-secret-0123456789')
+
+        config = _from_json({'access': {
+            'user_header_name': 'X-Forwarded-User',
+            'user_header_secret': '$$HEADER_SECRET'}})
+
+        self.assertEqual('env-secret-0123456789', config.user_header_secret)
+        self.assertNotIn('HEADER_SECRET', config.env_vars.build_env_vars())
+
+    def test_empty_secret_not_allowed(self):
+        self.assertRaises(
+            server_conf.InvalidServerConfigException,
+            _from_json,
+            {'access': {'user_header_name': 'X-Forwarded-User', 'user_header_secret': '  '}})
+
+    def test_non_string_secret_not_allowed(self):
+        self.assertRaises(
+            server_conf.InvalidServerConfigException,
+            _from_json,
+            {'access': {'user_header_name': 'X-Forwarded-User', 'user_header_secret': 12345}})
+
+    def test_warning_when_user_header_without_secret(self):
+        with self.assertLogs('server_conf', level='WARNING') as log_context:
+            _from_json({'access': {'user_header_name': 'X-Forwarded-User'}})
+        self.assertTrue(any('user_header_secret' in line for line in log_context.output))
+
+    def test_warning_when_short_secret(self):
+        with self.assertLogs('server_conf', level='WARNING') as log_context:
+            _from_json({'access': {
+                'user_header_name': 'X-Forwarded-User',
+                'user_header_secret': 'short'}})
+        self.assertTrue(any('16 characters' in line for line in log_context.output))
+
+    def test_no_warning_when_secret_configured(self):
+        with self.assertNoLogs('server_conf', level='WARNING'):
+            _from_json({'access': {
+                'user_header_name': 'X-Forwarded-User',
+                'user_header_secret': 'abcdefgh12345678'}})
 
 
 def _from_json(content):

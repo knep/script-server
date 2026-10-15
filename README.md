@@ -5,6 +5,33 @@
 
 ## What's new in this fork
 
+### 2026-10-14 — Upstream security fixes: proxy identity secret, cookie defaults
+
+Ported from [bugy/script-server](https://github.com/bugy/script-server) (author: Yaroslav Shepilov).
+
+- **[Breaking] Proxy identity header now requires a shared secret.** In no-login mode,
+  `access.user_header_name` lets a reverse proxy pass the username in a header. Previously
+  any client in `trusted_ips` could set that header to any username (including an admin).
+  Now the proxy must also send `X-ScriptServer-Proxy-Secret` matching the new
+  `access.user_header_secret` setting (supports `$$ENV_VAR`). If the secret is not
+  configured, the identity header is ignored and a startup warning is logged; a request
+  with the identity header but a wrong/missing secret is rejected.
+
+  ```json
+  {
+    "access": {
+      "trusted_ips": ["127.0.0.1"],
+      "user_header_name": "X-Forwarded-User",
+      "user_header_secret": "$$SCRIPT_SERVER_PROXY_SECRET"
+    }
+  }
+  ```
+
+- **`security.cookie_secure` now defaults to whether SSL is configured** (`ssl` section in
+  `conf.json`) instead of always `true`, so plain-HTTP setups work out of the box. If
+  HTTPS is terminated by a reverse proxy in front of Script Server, set
+  `"cookie_secure": true` explicitly to keep `Secure` cookies and the HSTS header.
+
 ### 2026-06-25 — Resizable sidebar
 
 The scripts sidebar can now be resized: drag the handle on its right edge to set
@@ -227,7 +254,7 @@ All responses (including WebSocket upgrade responses) now include the following 
 | `Referrer-Policy` | `strict-origin-when-cross-origin` | Always |
 | `Content-Security-Policy` | `default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' ws: wss:; frame-ancestors 'none'; object-src 'none'` | Always |
 | `Permissions-Policy` | `camera=(), microphone=(), geolocation=()` | Always |
-| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` | HTTPS only (`cookie_secure: true`) |
+| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` | `cookie_secure: true` (default when `ssl` is configured) |
 
 `X-Frame-Options: DENY` was already present; `frame-ancestors 'none'` in the CSP provides equivalent coverage for modern browsers.
 
@@ -421,25 +448,22 @@ See [server config page](https://github.com/bugy/script-server/wiki/Server-confi
 
 #### Running over plain HTTP (e.g. local dev)
 
-Cookies (including the XSRF token) are sent with the `Secure` flag by default, so
-they are **not stored by the browser over plain HTTP**. Combined with the default
-`token` XSRF protection — which requires the browser to read the `_xsrf` cookie and
-echo it back — this makes every `POST` (e.g. *starting an execution*) fail with
-`403` and an *"XSRF token missing or invalid"* message.
+`security.cookie_secure` defaults to `true` only when the `ssl` section is configured, so
+plain-HTTP setups work without extra configuration.
 
-When serving over HTTP (not HTTPS), set `cookie_secure` to `false` in `conf/conf.json`:
+If HTTPS is terminated by a reverse proxy in front of Script Server, set it explicitly so
+cookies keep the `Secure` flag and the HSTS header is sent:
 
 ```json
 {
   "security": {
-    "cookie_secure": false
+    "cookie_secure": true
   }
 }
 ```
 
-Alternatively, switch XSRF protection to header mode (`"xsrf_protection": "header"`),
-which validates the `X-Requested-With` header instead of a cookie token and so does
-not depend on cookies at all. Keep the secure defaults for any HTTPS deployment.
+With `cookie_secure: true` over plain HTTP, the browser won't store cookies (including
+the `_xsrf` token), and every `POST` fails with `403` *"XSRF token missing or invalid"*.
 
 > Tip: if you previously ran with the secure defaults, clear the stale `_xsrf` cookie
 > for the site (or use a fresh browser profile) after changing these settings.

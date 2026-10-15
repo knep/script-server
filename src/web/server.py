@@ -886,7 +886,9 @@ def init(server_config: ServerConfig,
     if auth.is_enabled():
         identification = AuthBasedIdentification(auth)
     else:
-        identification = IpBasedIdentification(server_config.ip_validator, server_config.user_header_name)
+        identification = IpBasedIdentification(server_config.ip_validator,
+                                               server_config.user_header_name,
+                                               user_header_secret=server_config.user_header_secret)
 
     downloads_folder = file_download_feature.get_result_files_folder()
 

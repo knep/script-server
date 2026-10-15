@@ -1,6 +1,9 @@
 import json
 from itertools import chain
 
+import tornado.web
+
+from auth.identification import InvalidUserHeaderSecretException
 from auth.user import User
 from utils import audit_utils
 
@@ -13,7 +16,11 @@ def wrap_to_server_event(event_type, data):
 
 
 def identify_user(request_handler):
-    user_id = request_handler.application.identification.identify(request_handler)
+    try:
+        user_id = request_handler.application.identification.identify(request_handler)
+    except InvalidUserHeaderSecretException as e:
+        # a rejected proxy identity is a client error, not a server failure
+        raise tornado.web.HTTPError(403, str(e), reason='Invalid proxy secret')
 
     if user_id is None:
         raise Exception('Could not identify user: ' + audit_utils.get_all_audit_names(request_handler))

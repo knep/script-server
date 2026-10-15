@@ -1,6 +1,6 @@
 import unittest
 
-from auth.identification import IpBasedIdentification
+from auth.identification import InvalidUserHeaderSecretException, IpBasedIdentification
 from auth.tornado_auth import TornadoAuth
 from model.trusted_ips import TrustedIpValidator
 from tests.test_utils import mock_object
@@ -9,7 +9,7 @@ from utils import date_utils
 COOKIE_KEY = 'client_id_token'
 
 
-def mock_request_handler(ip=None, x_forwarded_for=None, x_real_ip=None, saved_token=None, user_header_name=None, user_header_name_value=None):
+def mock_request_handler(ip=None, x_forwarded_for=None, x_real_ip=None, saved_token=None, user_header_name=None, user_header_name_value=None, proxy_secret=None):
     handler_mock = mock_object()
 
     handler_mock.application = mock_object()
@@ -31,6 +31,9 @@ def mock_request_handler(ip=None, x_forwarded_for=None, x_real_ip=None, saved_to
     
     if user_header_name and user_header_name_value:
         handler_mock.request.headers[user_header_name] = user_header_name_value
+
+    if proxy_secret:
+        handler_mock.request.headers[IpBasedIdentification.PROXY_SECRET_HEADER] = proxy_secret
 
     cookies = {COOKIE_KEY: saved_token}
 
@@ -187,3 +190,72 @@ class IpIdentificationTest(unittest.TestCase):
 
         self.assertNotEqual('something', id)
         self.assertNotEqual(new_token, 'something&100000')
+
+
+USER_HEADER_NAME = 'X-Forwarded-User'
+PROXY_SECRET = 'test-proxy-secret-0123456789'
+
+
+class UserHeaderSecretTest(unittest.TestCase):
+
+    @staticmethod
+    def create_identification(secret=PROXY_SECRET):
+        return IpBasedIdentification(TrustedIpValidator(['127.0.0.1']), USER_HEADER_NAME, user_header_secret=secret)
+
+    @staticmethod
+    def create_request_handler(user='admin_user', proxy_secret=None):
+        return mock_request_handler(
+            ip='127.0.0.1',
+            user_header_name=USER_HEADER_NAME,
+            user_header_name_value=user,
+            proxy_secret=proxy_secret)
+
+    def test_user_header_when_no_secret_configured(self):
+        request_handler = self.create_request_handler()
+        id = self.create_identification(secret=None).identify(request_handler)
+        self.assertNotEqual('admin_user', id)
+        self.assertEqual('127.0.0.1', id)
+
+    def test_user_header_when_correct_secret(self):
+        request_handler = self.create_request_handler(proxy_secret=PROXY_SECRET)
+        id = self.create_identification().identify(request_handler)
+        self.assertEqual('admin_user', id)
+
+    def test_user_header_when_missing_secret(self):
+        request_handler = self.create_request_handler()
+        self.assertRaises(InvalidUserHeaderSecretException, self.create_identification().identify, request_handler)
+
+    def test_user_header_when_wrong_secret(self):
+        request_handler = self.create_request_handler(proxy_secret='wrong-secret-0123456789')
+        self.assertRaises(InvalidUserHeaderSecretException, self.create_identification().identify, request_handler)
+
+    def test_no_user_header_when_secret_configured(self):
+        request_handler = mock_request_handler(ip='127.0.0.1')
+        id = self.create_identification().identify(request_handler)
+        self.assertEqual('127.0.0.1', id)
+
+    def test_untrusted_ip_when_secret_configured(self):
+        request_handler = mock_request_handler(ip='192.168.21.13')
+        id = self.create_identification().identify(request_handler)
+        self.assertNotEqual('admin_user', id)
+        self.assertNotEqual('192.168.21.13', id)
+
+    def test_audit_when_no_secret_configured(self):
+        request_handler = self.create_request_handler()
+        id = self.create_identification(secret=None).identify_for_audit(request_handler)
+        self.assertIsNone(id)
+
+    def test_audit_when_correct_secret(self):
+        request_handler = self.create_request_handler(proxy_secret=PROXY_SECRET)
+        id = self.create_identification().identify_for_audit(request_handler)
+        self.assertEqual('admin_user', id)
+
+    def test_audit_when_missing_secret(self):
+        request_handler = self.create_request_handler()
+        id = self.create_identification().identify_for_audit(request_handler)
+        self.assertIsNone(id)
+
+    def test_audit_when_wrong_secret(self):
+        request_handler = self.create_request_handler(proxy_secret='wrong-secret-0123456789')
+        id = self.create_identification().identify_for_audit(request_handler)
+        self.assertIsNone(id)

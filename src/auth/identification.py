@@ -1,4 +1,5 @@
 import abc
+import hmac
 import logging
 import uuid
 
@@ -34,14 +35,21 @@ class AuthBasedIdentification(Identification):
         return self.identify(request_handler)
 
 
+class InvalidUserHeaderSecretException(Exception):
+    def __init__(self, message) -> None:
+        super().__init__(message)
+
+
 class IpBasedIdentification(Identification):
     EXPIRES_DAYS = 14
     COOKIE_KEY = 'client_id_token'
     EMPTY_TOKEN = (None, None)
+    PROXY_SECRET_HEADER = 'X-ScriptServer-Proxy-Secret'
 
-    def __init__(self, ip_validator: TrustedIpValidator, user_header_name) -> None:
+    def __init__(self, ip_validator: TrustedIpValidator, user_header_name, user_header_secret=None) -> None:
         self._ip_validator = ip_validator
         self._user_header_name = user_header_name
+        self._user_header_secret = user_header_secret
 
     def identify(self, request_handler):
         remote_ip = request_handler.request.remote_ip
@@ -53,7 +61,16 @@ class IpBasedIdentification(Identification):
             if self._user_header_name:
                 user_header = request_handler.request.headers.get(self._user_header_name, None)
                 if user_header:
-                    return user_header
+                    if not self._user_header_secret:
+                        LOGGER.warning(
+                            'Client %s sent %s header but user_header_secret is not configured, '
+                            'ignoring the claimed identity. Configure user_header_secret to enable '
+                            'header-based identity.', remote_ip, self._user_header_name)
+                    elif not self._verify_user_header_secret(request_handler):
+                        raise InvalidUserHeaderSecretException(
+                            'Missing or invalid ' + self.PROXY_SECRET_HEADER + ' header')
+                    else:
+                        return user_header
             return self._resolve_ip(request_handler)
 
         (client_id, days_remaining) = self._read_client_token(request_handler)
@@ -77,9 +94,22 @@ class IpBasedIdentification(Identification):
 
     def identify_for_audit(self, request_handler):
         remote_ip = request_handler.request.remote_ip
-        if self._ip_validator.is_trusted(remote_ip) and (self._user_header_name):
-            return request_handler.request.headers.get(self._user_header_name, None)
+        if self._ip_validator.is_trusted(remote_ip) and self._user_header_name and self._user_header_secret:
+            user_header = request_handler.request.headers.get(self._user_header_name, None)
+            if user_header and self._verify_user_header_secret(request_handler):
+                return user_header
         return None
+
+    def _verify_user_header_secret(self, request_handler):
+        provided_secret = request_handler.request.headers.get(self.PROXY_SECRET_HEADER, None)
+        if provided_secret and hmac.compare_digest(
+                self._user_header_secret.encode('utf-8'),
+                provided_secret.encode('utf-8')):
+            return True
+
+        LOGGER.warning('Client %s sent %s header without a valid %s header, ignoring the claimed identity',
+                       request_handler.request.remote_ip, self._user_header_name, self.PROXY_SECRET_HEADER)
+        return False
 
     def _resolve_ip(self, request_handler):
         proxied_ip = tornado_utils.get_proxied_ip(request_handler)

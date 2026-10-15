@@ -41,9 +41,10 @@ class ServerConfig(object):
         self.max_request_size_mb = None
         self.callbacks_config = None
         self.user_header_name = None
+        self.user_header_secret = None
         self.secret_storage_file = None
         self.xsrf_protection = None
-        self.cookie_secure = True
+        self.cookie_secure = False
         # noinspection PyTypeChecker
         self.env_vars: EnvVariables = None
 
@@ -100,6 +101,7 @@ class ScriptGroupsConfig:
 def _build_env_vars(json_object):
     sensitive_config_paths = [
         ['auth', 'secret'],
+        ['access', 'user_header_secret'],
         ['alerts', 'destinations', 'password'],
         ['callbacks', 'destinations', 'password']
     ]
@@ -167,10 +169,12 @@ def from_json(conf_path, temp_folder):
         allowed_users = access_config.get('allowed_users')
         user_groups = model_helper.read_dict(access_config, 'groups')
         user_header_name = access_config.get('user_header_name')
+        user_header_secret = _parse_user_header_secret(access_config)
     else:
         allowed_users = None
         user_groups = {}
         user_header_name = None
+        user_header_secret = None
 
     auth_config = json_object.get('auth')
     if auth_config:
@@ -202,7 +206,7 @@ def from_json(conf_path, temp_folder):
 
     security = model_helper.read_dict(json_object, 'security')
 
-    config.cookie_secure = model_helper.read_bool_from_config('cookie_secure', security, default=True)
+    config.cookie_secure = model_helper.read_bool_from_config('cookie_secure', security, default=config.ssl)
     config.allowed_users = _prepare_allowed_users(allowed_users, admin_users, user_groups)
     config.alerts_config = json_object.get('alerts')
     config.callbacks_config = json_object.get('callbacks')
@@ -213,7 +217,16 @@ def from_json(conf_path, temp_folder):
     config.full_history_users = full_history_users
     config.code_editor_users = code_editor_users
     config.user_header_name = user_header_name
+    config.user_header_secret = user_header_secret
     config.ip_validator = TrustedIpValidator(trusted_ips)
+
+    if not auth_config:
+        if user_header_name and not user_header_secret:
+            LOGGER.warning('access.user_header_name is configured without access.user_header_secret: '
+                           'the header will be ignored and trusted-IP clients will get an anonymous identity '
+                           'instead. Configure access.user_header_secret to enable header-based identity.')
+        elif user_header_secret and not user_header_name:
+            LOGGER.warning('access.user_header_secret has no effect without access.user_header_name')
 
     config.max_request_size_mb = read_int_from_config('max_request_size', json_object, default=10)
 
@@ -283,6 +296,26 @@ def _prepare_allowed_users(allowed_users, admin_users, user_groups):
                 coerced_users.update(users)
 
     return list(coerced_users)
+
+
+def _parse_user_header_secret(access_config):
+    raw_secret = access_config.get('user_header_secret')
+    if raw_secret is None:
+        return None
+
+    if not isinstance(raw_secret, str):
+        raise InvalidServerConfigException('access.user_header_secret should be a string')
+
+    secret = model_helper.resolve_env_vars(raw_secret, full_match=True)
+    if (secret is None) or (not secret.strip()):
+        raise InvalidServerConfigException('access.user_header_secret should be a non-empty string')
+
+    secret = secret.strip()
+    if len(secret) < 16:
+        LOGGER.warning('access.user_header_secret is shorter than 16 characters, '
+                       'please use a long random value')
+
+    return secret
 
 
 def _parse_admin_users(json_object, default_admins=None):
